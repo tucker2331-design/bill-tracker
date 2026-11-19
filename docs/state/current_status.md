@@ -35,8 +35,8 @@ status: active
 ## NEXT (needs owner infra / a decision — then I execute)
 
 - **Per-state admin role** (owner, 2026-11-19, to-do): state leads manage their team's sign-ins and each person's districts; admins see the full Health page — needs F1 (clients) first: [[ideas/state_admin_role]].
-- **Executive site** (owner, 2026-11-19, brainstorm done — your answers to F1–F3 next): one site over every state, two lenses (Platform | VOT): [[ideas/executive_site]].
-- **Every state at Virginia's baseline** — PA bill documents done 2026-11-19; full Health next; summaries + PA vote predictions are your calls: [[ideas/state_baseline_parity]].
+- **Executive site** (owner decided the shape 2026-11-19: two halves, tiered health, exec site for 2+ states; groundwork behind session-critical tracking): [[ideas/executive_site]] §7.
+- **Every state at Virginia's baseline** — PA bill documents done; PA bill-fate stats level with VA (round 3); full Health next; summaries + PA vote predictions are your calls: [[ideas/state_baseline_parity]].
 - **Rename the Virginia site to `bill-tracker-va`** (owner, 2026-11-19, parked for later) — owner renames the Worker in Cloudflare + adds the new sign-in origin first, then I change `wrangler.toml`: [[workflow/va_worker_rename]].
 - **🇵🇦 PA screens, items 3-5 of the owner's 2026-11-01 list (1 War Room + 2 Calendar merged #258/#259; 3 built):**
   **3. What's new — DONE (#260, #261):** one line per bill on both sites; VA brackets on 100% of rows (refid first, LIS chamber code second, validated each run). **4. Health for PA — DONE (#266):** one Health screen, PA fed by its own checks; `HealthIntake.tsx` retired.

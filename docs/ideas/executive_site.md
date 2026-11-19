@@ -1,8 +1,8 @@
 ---
 tags: [ideas, executive, operator, multi-state, brainstorm, owner-request]
 updated: 2026-11-19
-status: stub
-open_loop: Executive site brainstorm (owner 2026-11-19) — awaiting the owner's answers to F1–F3; no build until then.
+status: active
+open_loop: Executive site — owner decided the shape 2026-11-19 (two halves, tiers); client side is groundwork, behind session-critical bill tracking. Build order in §7.
 ---
 
 # The executive site — brainstorm (owner, 2026-11-19)
@@ -100,3 +100,35 @@ no new data sources. Then the VOT portfolio and "this week".
   "for an advocacy organization that lobbies for its own agenda" (one org). F1 would widen that.
 - **F2.** Is the cross-state client page available to every client's director, or only to you for VOT?
 - **F3.** Will anyone besides you ever see the Operator lens (a co-operator)?
+
+## 7. Owner's decisions (2026-11-19)
+> *"two independent designs, the command control module for the whole system, and then the command control module as
+> a client and put them into one link … re use the vot side for potential clients and if i move on from vot i can keep
+> the site control side intact."*
+
+- **Two halves of one master site:**
+  - **Platform control.** The owner's alone. It never depends on any one client, so it survives the owner leaving VOT.
+  - **Client control.** One reusable module; VOT is its first client.
+- **The line is crossed:** 3 states live, data for 4, NY expected within weeks.
+- **F1, clients — both, by framework:** a state can be sold to several orgs (Virginia), and one org can buy
+  several states (VOT). Any number of states can be added, and **a client with 2 or more states gets an executive
+  site** to manage them.
+- **Tiers (health shown by responsibility):**
+
+| who | health they see | also |
+|---|---|---|
+| owner (Platform control) | everything: every client, every state, the infrastructure, our internal trackers | tools clients never see |
+| multi-state client admin | multi-state health for their own states | their executive site |
+| single-state client admin | their state's health (the admin privileges in [[ideas/state_admin_role]]) | team management |
+| member | the basic page | — |
+
+- **Priority:** the client side is groundwork ("ensuring our infrastructure is prepared for that switch"), behind
+  bill tracking for the coming PA and VA sessions, where clients already exist.
+- **Build order:**
+  1. Session-critical bill tracking first.
+  2. An organization key (`org_id`) on positions, contacts and team, defaulting to one org per existing site, so a
+     second org can join without a migration.
+  3. Platform status board.
+  4. Tiered health.
+  5. The client executive site.
+

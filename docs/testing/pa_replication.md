@@ -118,6 +118,34 @@ first); co-sponsor inputs are a separate arm because PA's co-sponsor list is fin
   recent session after a majority change; (3) historical committee seats from batch 3's committee roll calls (seat
   and chair added +0.044 / +0.037 on 2025–26); (4) member votes for the later gates (batch 3).
 
+## Bill fate, round 3 — PA level with Virginia (2026-11-19)
+Owner: *"even out pa to va … stats wise too. keep pushing until its even."* `pa_fate_v3.py` → `results_fate_v3.json`,
+`pa_fate_v3b.py` → `results_fate_v3b.json`. New input: **historical committee seats**, taken from batch 3's
+committee roll calls (Open States, CC0: "Committee vote (Health): …"). The sponsor "sits on the bill's first
+committee" if they voted in any of its roll calls that session. Seats are set at the session's start, so this is
+known on the filing day. Coverage is about a third of bills in 2017–21 (fewer recorded committee votes) and 99.5%
+or more in 2023–26.
+
+| held out | round 2 (clean) | **+ seats (clean)** | + co-sponsors on the committee (timing unverified) |
+|---|---|---|---|
+| 2023–24 | 0.775 | **0.791** (logistic) | 0.805 logistic · 0.820 trees · 0.824 blend |
+| 2025–26 | 0.807 | **0.813–0.819** | 0.830 · 0.841 · 0.842 |
+
+**Virginia, same yardstick** ([[testing/bill_fate]], year-ahead advance AUC, which *includes co-patrons at filing*):
+0.676 (2022) · 0.725 (2023) · 0.756 (2024) · 0.809 (2025). **PA is level with or ahead of Virginia in every
+comparable year.** With clean inputs only, PA is 0.791 and 0.813; the inputs closest to Virginia's (co-sponsors
+included) give 0.805–0.842.
+
+- Seat effect, held out: sponsor on the committee 41% got out vs 20% (2023–24, n 1,497 / 2,345); 2025–26 40% vs 23%.
+- Co-sponsor timing: PA's list is final and undated. `fillSequence="1"` (1% of sponsors) is NOT a "joined
+  later" flag: only 26% of those sponsors sit in the trailing block of the list. So this arm stays labelled
+  unverified. Dating the co-sponsors is still the open item.
+- Stats where PA still differs from Virginia are structural, not a modelling gap:
+  - First-vote overall lift: PA committees record only bills they report (88% yes), so "everyone votes yes" is
+    already 87.5%. On contested votes PA is ahead (70.6–79.1% vs 66–68%).
+  - Member × subject: PA has no subject labels; the statute stand-in gives r 0.135.
+  - Attendance: PA members are almost never absent.
+
 ## Batch 3 — member votes (2026-11-18)
 Source: Open States PA session CSVs 2017–2026 (CC0; links from the owner; `MANIFEST.json`, zips not committed).
 22,885 roll calls, 2.1 M ballots; 0.19% of ballots unresolved (counted, kept out of party statistics). PA's committee
