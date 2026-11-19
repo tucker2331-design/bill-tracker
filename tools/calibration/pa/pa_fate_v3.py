@@ -2,23 +2,28 @@
 """PA bill fate, round 3: close the gap to Virginia's locked 0.80 on the 2023-24 holdout (owner 2026-11-19: "even out
 pa to va … stats wise too. keep pushing until its even").
 
-Round 2 (pa_fate_v2.py) reached 0.775 (2023-24) and 0.807 (2025-26). The listed next lever was HISTORICAL committee
-seats. Batch 3's Open States session files (CC0) record every PA committee roll call with the room in the motion
-("Committee vote (Health): …"), so who sat on which committee in which session is known for 2017-2026 — from the
-votes themselves, never a roster guess. New inputs, both knowable on the filing day (seats are set at the session's
-start):
-  * seat — the prime sponsor voted in at least one roll call of the bill's first committee that session;
-  * seat_known — the committee has recorded roll calls that session (else seat is unknown, not "no").
+Round 2 (pa_fate_v2.py) reached 0.775 (2023-24) and 0.807 (2025-26). The listed next lever was committee seats.
+Batch 3's Open States session files (CC0) record every PA committee roll call with the room in the motion
+("Committee vote (Health): …") and its date. ONLY what is on the record before the bill is filed is used
+(Codex #277: a roll call after filing — let alone the bill's own reporting vote — is a future observation):
+  * seat_before / seat_before_known — the sponsor voted in a roll call of the bill's first committee dated strictly
+    before the bill's filing date this session; known only if that committee had such a roll call;
+  * seat_prior / seat_prior_known — the sponsor voted in that committee in the PREVIOUS session (complete at filing);
+    known only if that committee had roll calls then.
+Unavailable membership stays unknown (flag 0), never "no seat". The first, leaky version (any roll call in the
+session) is kept as a labelled contrast only, so the size of the leak is on the record.
 Same protocol as round 2: fit on earlier sessions, score on the held-out one; every other input unchanged.
 """
 from __future__ import annotations
 
+import collections
 import json
 import os
 import re
 import sys
 
 import numpy as np
+import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 
@@ -33,59 +38,81 @@ def room_key(name: str) -> str:
     return re.sub(r"[^A-Z]", "", (name or "").upper().replace("&", " AND "))
 
 
-def seats(F):
+def _match(keys, nk: str):
+    """The roll-call keys that are this sponsor (exact, or the first-initial form used for shared surnames)."""
+    return [k for k in keys if k == nk or (k.endswith(nk) and len(k) - len(nk) <= 1)]
+
+
+def committee_ballots(F):
     E, B, _unresolved = pa_batch3.load(F)
-    com = E[E.committee & E.chamber.notna()][["eid", "session", "chamber", "org"]]
+    com = E[E.committee & E.chamber.notna()][["eid", "session", "chamber", "org", "date"]]
     j = B.dropna(subset=["who"]).merge(com, on="eid")
     j["room"] = j.org.map(room_key)
     j["key"] = j.who.str.split("|").str[1]
-    members = j.groupby(["session", "chamber", "room"]).key.apply(set).to_dict()
-    rooms = set(members)
-    seat, known = [], []
-    for s, b, c, p in zip(F.session, F.body, F.cmte, F.p_name):
-        k = (s, b, room_key(c))
-        if k in rooms:
-            known.append(1)
-            nk = pa_batch3.norm(p)
-            m = members[k]
-            seat.append(int(nk in m or any(x.endswith(nk) and len(x) - len(nk) <= 1 for x in m)))
-        else:
-            known.append(0)
-            seat.append(0)
-    return np.array(seat), np.array(known), {"committee_rooms_with_roll_calls": len(rooms),
-                                             "ballots_in_committee": int(len(j))}
+    j["date"] = pd.to_datetime(j.date, errors="coerce")
+    return j.dropna(subset=["date"]), B
+
+
+def seats(F, j):
+    first_vote = collections.defaultdict(dict)        # (session, chamber, room) -> {member key: first roll-call date}
+    for (s, b, r, k), t in j.groupby(["session", "chamber", "room", "key"]).date.min().items():
+        first_vote[(s, b, r)][k] = t
+    room_first = j.groupby(["session", "chamber", "room"]).date.min().to_dict()
+    sessions = sorted(F.session.unique())
+    prev = {s: sessions[i - 1] for i, s in enumerate(sessions) if i > 0}
+    out = {n: [] for n in ("seat_before", "seat_before_known", "seat_prior", "seat_prior_known", "seat_any_LEAKY",
+                           "seat_any_known_LEAKY")}
+    for s, b, c, p, d in zip(F.session, F.body, F.cmte, F.p_name, F.intro):
+        r, nk = room_key(c), pa_batch3.norm(p)
+        fv = first_vote.get((s, b, r), {})
+        rf = room_first.get((s, b, r))
+        known_before = int(rf is not None and pd.notna(d) and rf < d)
+        out["seat_before_known"].append(known_before)
+        out["seat_before"].append(int(known_before and any(fv[k] < d for k in _match(fv, nk))))
+        pv = first_vote.get((prev.get(s), b, r), {}) if prev.get(s) else {}
+        out["seat_prior_known"].append(int(bool(pv)))
+        out["seat_prior"].append(int(bool(pv) and bool(_match(pv, nk))))
+        out["seat_any_known_LEAKY"].append(int(bool(fv)))
+        out["seat_any_LEAKY"].append(int(bool(_match(fv, nk))))
+    return {k: np.array(v) for k, v in out.items()}
+
+
+def fit_eval(XX, y, tr, te):
+    lr = LogisticRegression(max_iter=4000).fit(XX[tr], y[tr])
+    gb = HistGradientBoostingClassifier(max_iter=400, learning_rate=0.05, max_leaf_nodes=31, l2_regularization=1.0,
+                                        random_state=0).fit(XX[tr], y[tr])
+    pl, pg = lr.predict_proba(XX[te])[:, 1], gb.predict_proba(XX[te])[:, 1]
+    return {"logistic": score(y[te], pl), "trees": score(y[te], pg), "blend": score(y[te], (pl + pg) / 2)}
 
 
 def main():
     F = frame().reset_index(drop=True)
     X, _C = features(F)
-    seat, known, cov = seats(F)
-    X3 = X.copy()
-    X3["seat"] = seat
-    X3["seat_known"] = known
+    j, _B = committee_ballots(F)
+    S = seats(F, j)
+    clean = X.copy()
+    for k in ("seat_before", "seat_before_known", "seat_prior", "seat_prior_known"):
+        clean[k] = S[k]
+    leaky = X.copy()
+    leaky["seat"], leaky["seat_known"] = S["seat_any_LEAKY"], S["seat_any_known_LEAKY"]
     y = F.out
-    res = {"method": __doc__.split("\n\n")[1].strip(), "virginia_locked_2026": 0.80, "coverage": cov, "held_out": {}}
+    res = {"method": __doc__.split("\n\n")[1].strip(), "virginia_locked_by_year": {"2022": 0.676, "2023": 0.725,
+           "2024": 0.756, "2025": 0.809}, "coverage": {}, "held_out": {}}
     for s in sorted(F.session.unique()):
-        m = F.session == s
-        res["coverage"][s] = {"bills": int(m.sum()), "seat_known": int(known[m].sum()), "seat": int(seat[m].sum())}
+        m = (F.session == s).to_numpy()
+        res["coverage"][s] = {"bills": int(m.sum()), **{k: int(S[k][m].sum()) for k in S}}
     for label, (until, test) in {"A: 2023-24": ("2021_0", "2023_0"), "B: 2025-26": ("2023_0", "2025_0")}.items():
         tr, te = (F.session <= until).to_numpy(), (F.session == test).to_numpy()
-        out = {"bills": int(te.sum())}
-        for name, XX in (("round2_inputs", X), ("plus_seats", X3)):
-            lr = LogisticRegression(max_iter=4000).fit(XX[tr], y[tr])
-            gb = HistGradientBoostingClassifier(max_iter=400, learning_rate=0.05, max_leaf_nodes=31,
-                                                l2_regularization=1.0, random_state=0).fit(XX[tr], y[tr])
-            out[name] = {"logistic": score(y[te], lr.predict_proba(XX[te])[:, 1]),
-                         "trees": score(y[te], gb.predict_proba(XX[te])[:, 1])}
-        # recency: the last two training sessions only (the 2023 House flip put a new majority in charge)
-        rec = (F.session.isin(sorted(s for s in F.session.unique() if s <= until)[-2:])).to_numpy()
-        lr = LogisticRegression(max_iter=4000).fit(X3[rec], y[rec])
-        out["plus_seats_recent_two_sessions_logistic"] = score(y[te], lr.predict_proba(X3[te])[:, 1])
-        sk = te & (known == 1)
-        out["seat_effect_test_year"] = {
-            "out_rate_seat": round(float(y[sk & (seat == 1)].mean()), 3), "n_seat": int((sk & (seat == 1)).sum()),
-            "out_rate_no_seat": round(float(y[sk & (seat == 0)].mean()), 3), "n_no_seat": int((sk & (seat == 0)).sum())}
-        res["held_out"][label] = out
+        yes, known = S["seat_prior"] == 1, S["seat_prior_known"] == 1
+        res["held_out"][label] = {
+            "bills": int(te.sum()),
+            "round2_inputs": fit_eval(X, y, tr, te),
+            "plus_filing_day_seats": fit_eval(clean, y, tr, te),
+            "LEAKY_any_roll_call_in_session_contrast_only": fit_eval(leaky, y, tr, te),
+            "seat_prior_effect_test_year": {
+                "out_rate_seat_prior": round(float(y[te & yes].mean()), 3), "n": int((te & yes).sum()),
+                "out_rate_known_no_seat_prior": round(float(y[te & known & ~yes].mean()), 3),
+                "n_no": int((te & known & ~yes).sum())}}
     with open(os.path.join(HERE, "results_fate_v3.json"), "w") as f:
         json.dump(res, f, indent=1)
     print(json.dumps(res, indent=1))

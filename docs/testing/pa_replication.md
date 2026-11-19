@@ -120,26 +120,33 @@ first); co-sponsor inputs are a separate arm because PA's co-sponsor list is fin
 
 ## Bill fate, round 3 — PA level with Virginia (2026-11-19)
 Owner: *"even out pa to va … stats wise too. keep pushing until its even."* `pa_fate_v3.py` → `results_fate_v3.json`,
-`pa_fate_v3b.py` → `results_fate_v3b.json`. New input: **historical committee seats**, taken from batch 3's
-committee roll calls (Open States, CC0: "Committee vote (Health): …"). The sponsor "sits on the bill's first
-committee" if they voted in any of its roll calls that session. Seats are set at the session's start, so this is
-known on the filing day. Coverage is about a third of bills in 2017–21 (fewer recorded committee votes) and 99.5%
-or more in 2023–26.
+`pa_fate_v3b.py` → `results_fate_v3b.json`.
 
-| held out | round 2 (clean) | **+ seats (clean)** | + co-sponsors on the committee (timing unverified) |
-|---|---|---|---|
-| 2023–24 | 0.775 | **0.791** (logistic) | 0.805 logistic · 0.820 trees · 0.824 blend |
-| 2025–26 | 0.807 | **0.813–0.819** | 0.830 · 0.841 · 0.842 |
+New input: **committee seats**, taken from batch 3's committee roll calls (Open States, CC0: "Committee vote
+(Health): …", dated). **Filing-day information only** (Codex #277): a roll call after filing is a future
+observation, and so, even more, is the bill's own reporting vote. Two forms, each with an "unknown" flag:
+- `seat_before`: the sponsor voted in a roll call of the bill's first committee dated strictly before filing,
+  this session.
+- `seat_prior`: the sponsor sat on that committee in the previous session.
+
+The first version, which counted any roll call in the session, is kept as a labelled contrast. Its leak turned out
+to be tiny: the filing-day version scores the same.
+
+| held out | round 2 (clean) | **+ filing-day seats (clean)** | leaky contrast | + co-sponsors on the committee (timing unverified) |
+|---|---|---|---|---|
+| 2023–24 | 0.775 | **0.790 logistic · 0.791 blend** | 0.791 | 0.809 logistic · 0.820 trees · 0.826 blend |
+| 2025–26 | 0.807 | **0.812 · 0.819 trees · 0.820 blend** | 0.813–0.818 | 0.826 · 0.843 · 0.840 |
 
 **Virginia, same yardstick** ([[testing/bill_fate]], year-ahead advance AUC, which *includes co-patrons at filing*):
 0.676 (2022) · 0.725 (2023) · 0.756 (2024) · 0.809 (2025). **PA is level with or ahead of Virginia in every
-comparable year.** With clean inputs only, PA is 0.791 and 0.813; the inputs closest to Virginia's (co-sponsors
-included) give 0.805–0.842.
+comparable year.** With clean inputs only, PA is 0.791 and 0.820; the inputs closest to Virginia's (co-sponsors
+included) give 0.809–0.843.
 
-- Seat effect, held out: sponsor on the committee 41% got out vs 20% (2023–24, n 1,497 / 2,345); 2025–26 40% vs 23%.
-- Co-sponsor timing: PA's list is final and undated. `fillSequence="1"` (1% of sponsors) is NOT a "joined
-  later" flag: only 26% of those sponsors sit in the trailing block of the list. So this arm stays labelled
-  unverified. Dating the co-sponsors is still the open item.
+- Held-out seat effect (previous-session seat): got out 40.5% vs 26.1% (2023–24, n 523 / 750); 40.3% vs 22.7%
+  (2025–26).
+- Co-sponsor timing: PA's list is final and undated. `fillSequence="1"` (1% of sponsors) is NOT a "joined later"
+  flag: only 26% of those sponsors sit in the trailing block of the list. So this arm stays labelled unverified.
+  Dating the co-sponsors is still the open item.
 - Stats where PA still differs from Virginia are structural, not a modelling gap:
   - First-vote overall lift: PA committees record only bills they report (88% yes), so "everyone votes yes" is
     already 87.5%. On contested votes PA is ahead (70.6–79.1% vs 66–68%).

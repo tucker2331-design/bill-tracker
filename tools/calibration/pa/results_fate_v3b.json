@@ -1,74 +1,74 @@
 {
  "held_out": {
   "A: 2023-24": {
-   "clean_seats_interactions": {
+   "filing_day_seats": {
     "logistic": {
-     "auc": 0.784,
-     "log_loss": 0.488,
-     "brier": 0.1609
+     "auc": 0.79,
+     "log_loss": 0.4809,
+     "brier": 0.1582
     },
     "trees": {
-     "auc": 0.784,
-     "log_loss": 0.4887,
-     "brier": 0.162
+     "auc": 0.78,
+     "log_loss": 0.4934,
+     "brier": 0.1636
     },
     "blend": {
-     "auc": 0.79,
-     "log_loss": 0.4804,
-     "brier": 0.1584
+     "auc": 0.791,
+     "log_loss": 0.4795,
+     "brier": 0.1581
     }
    },
    "plus_cosponsor_arm_timing_unverified": {
     "logistic": {
-     "auc": 0.805,
-     "log_loss": 0.471,
-     "brier": 0.1546
+     "auc": 0.809,
+     "log_loss": 0.4639,
+     "brier": 0.1521
     },
     "trees": {
      "auc": 0.82,
-     "log_loss": 0.4541,
-     "brier": 0.1493
+     "log_loss": 0.4534,
+     "brier": 0.1488
     },
     "blend": {
-     "auc": 0.824,
-     "log_loss": 0.4486,
-     "brier": 0.1466
+     "auc": 0.826,
+     "log_loss": 0.447,
+     "brier": 0.146
     }
    }
   },
   "B: 2025-26": {
-   "clean_seats_interactions": {
+   "filing_day_seats": {
     "logistic": {
-     "auc": 0.814,
-     "log_loss": 0.4675,
-     "brier": 0.1528
+     "auc": 0.812,
+     "log_loss": 0.4708,
+     "brier": 0.1544
     },
     "trees": {
-     "auc": 0.815,
-     "log_loss": 0.467,
-     "brier": 0.1526
+     "auc": 0.819,
+     "log_loss": 0.4624,
+     "brier": 0.1509
     },
     "blend": {
-     "auc": 0.819,
-     "log_loss": 0.4611,
+     "auc": 0.82,
+     "log_loss": 0.4606,
      "brier": 0.1505
     }
    },
    "plus_cosponsor_arm_timing_unverified": {
     "logistic": {
-     "auc": 0.83,
-     "log_loss": 0.4505,
-     "brier": 0.147
+     "auc": 0.826,
+     "log_loss": 0.4556,
+     "brier": 0.1491
     },
     "trees": {
-     "auc": 0.841,
-     "log_loss": 0.4409,
-     "brier": 0.1427
+     "auc": 0.843,
+     "log_loss": 0.4367,
+     "brier": 0.142
     },
     "blend": {
-     "auc": 0.842,
-     "log_loss": 0.4356,
-     "brier": 0.1417
+     "auc": 0.84,
+     "log_loss": 0.4373,
+     "brier": 0.1426
     }
    }
   }
