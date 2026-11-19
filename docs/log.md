@@ -8,6 +8,15 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] decision | PA at Virginia's baseline (bill documents), admin role + executive site on the to-do
+Owner asked for PA at VA's baseline, full-screen design links, a per-state admin role to-do, and an executive-site
+brainstorm (justified, operator vs VOT legislative-manager lenses). Done: PA bill page lists the bill's own documents
+from the export (text, sponsor's memo, fiscal notes; 5,267/5,269 bills); [[ideas/state_baseline_parity]] (summaries and
+PA predictions are owner calls, full Health is next); [[ideas/state_admin_role]]; [[ideas/executive_site]] (F1: one org
+per state site, or several clients — must precede the admin role); the Virginia Worker rename parked
+([[workflow/va_worker_rename]]); brainstorm rule added to [[workflow/design_proposal_protocol]]. Full-screen design
+artifacts published (Drafting room, Legislator page).
+
 ## [2026-11-19] run | California sheet filled after #275 — bills, calendar, committee members, What's new
 Run 44436420376: 5,040 bills; 25,171 calendar rows (1,065 committee meetings, 295 floor + 204 check-in sessions,
 21,219 bill rows with their vote); roster ok — 57 committees, 590 seats, 0 bills without a member list; Action_Where
