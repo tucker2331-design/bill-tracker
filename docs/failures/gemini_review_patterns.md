@@ -501,3 +501,14 @@ misdiagnoses). Instead the real failure mode it pointed at — one malformed fil
 each Open States file is validated (a dict carrying its required keys) and an unreadable one is skipped and COUNTED
 (`roster_files_unreadable`, a Health check), so one bad file never sinks the roster and a code bug still fails loudly.
 Its session-prefix guard was already implied (an empty universe raises earlier) but made explicit — cheap.
+
+## 2026-11-19 — PR #277 (PA bill fate round 3). Codex 1 × P1.
+
+### A held-out SESSION is not a held-out PAST
+The committee-seat input was built from every committee roll call in the session, including roll calls after the
+bill was filed and possibly the bill's own reporting vote. Holding out the whole session blocks leakage across
+sessions but not within one. **Fix:** filing-day information only: roll calls dated strictly before filing, or the
+previous session, each with an "unknown" flag. The leak turned out to be tiny (0.791 → 0.791, 0.818 → 0.820), but
+the clean number is the only one that can be quoted. **Rule:** for every input, ask "on what date did this become
+public?", not just "which session is it from?"
+

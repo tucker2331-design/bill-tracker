@@ -1,0 +1,214 @@
+{
+ "method": "Round 2 (pa_fate_v2.py) reached 0.775 (2023-24) and 0.807 (2025-26). The listed next lever was committee seats.\nBatch 3's Open States session files (CC0) record every PA committee roll call with the room in the motion\n(\"Committee vote (Health): \u2026\") and its date. ONLY what is on the record before the bill is filed is used\n(Codex #277: a roll call after filing \u2014 let alone the bill's own reporting vote \u2014 is a future observation):\n  * seat_before / seat_before_known \u2014 the sponsor voted in a roll call of the bill's first committee dated strictly\n    before the bill's filing date this session; known only if that committee had such a roll call;\n  * seat_prior / seat_prior_known \u2014 the sponsor voted in that committee in the PREVIOUS session (complete at filing);\n    known only if that committee had roll calls then.\nUnavailable membership stays unknown (flag 0), never \"no seat\". The first, leaky version (any roll call in the\nsession) is kept as a labelled contrast only, so the size of the leak is on the record.\nSame protocol as round 2: fit on earlier sessions, score on the held-out one; every other input unchanged.",
+ "virginia_locked_by_year": {
+  "2022": 0.676,
+  "2023": 0.725,
+  "2024": 0.756,
+  "2025": 0.809
+ },
+ "coverage": {
+  "2009_0": {
+   "bills": 4274,
+   "seat_before": 0,
+   "seat_before_known": 0,
+   "seat_prior": 0,
+   "seat_prior_known": 0,
+   "seat_any_LEAKY": 0,
+   "seat_any_known_LEAKY": 0
+  },
+  "2011_0": {
+   "bills": 4311,
+   "seat_before": 0,
+   "seat_before_known": 0,
+   "seat_prior": 0,
+   "seat_prior_known": 0,
+   "seat_any_LEAKY": 0,
+   "seat_any_known_LEAKY": 0
+  },
+  "2013_0": {
+   "bills": 3998,
+   "seat_before": 0,
+   "seat_before_known": 0,
+   "seat_prior": 0,
+   "seat_prior_known": 0,
+   "seat_any_LEAKY": 0,
+   "seat_any_known_LEAKY": 0
+  },
+  "2015_0": {
+   "bills": 3758,
+   "seat_before": 0,
+   "seat_before_known": 0,
+   "seat_prior": 0,
+   "seat_prior_known": 0,
+   "seat_any_LEAKY": 0,
+   "seat_any_known_LEAKY": 0
+  },
+  "2017_0": {
+   "bills": 3954,
+   "seat_before": 440,
+   "seat_before_known": 981,
+   "seat_prior": 0,
+   "seat_prior_known": 0,
+   "seat_any_LEAKY": 557,
+   "seat_any_known_LEAKY": 1260
+  },
+  "2019_0": {
+   "bills": 4199,
+   "seat_before": 468,
+   "seat_before_known": 1041,
+   "seat_prior": 486,
+   "seat_prior_known": 1319,
+   "seat_any_LEAKY": 582,
+   "seat_any_known_LEAKY": 1331
+  },
+  "2021_0": {
+   "bills": 4112,
+   "seat_before": 492,
+   "seat_before_known": 1024,
+   "seat_prior": 512,
+   "seat_prior_known": 1289,
+   "seat_any_LEAKY": 605,
+   "seat_any_known_LEAKY": 1289
+  },
+  "2023_0": {
+   "bills": 3862,
+   "seat_before": 1127,
+   "seat_before_known": 2817,
+   "seat_prior": 523,
+   "seat_prior_known": 1273,
+   "seat_any_LEAKY": 1497,
+   "seat_any_known_LEAKY": 3842
+  },
+  "2025_0": {
+   "bills": 4184,
+   "seat_before": 1235,
+   "seat_before_known": 3357,
+   "seat_prior": 1393,
+   "seat_prior_known": 3892,
+   "seat_any_LEAKY": 1544,
+   "seat_any_known_LEAKY": 4182
+  }
+ },
+ "held_out": {
+  "A: 2023-24": {
+   "bills": 3862,
+   "round2_inputs": {
+    "logistic": {
+     "auc": 0.775,
+     "log_loss": 0.4946,
+     "brier": 0.1639
+    },
+    "trees": {
+     "auc": 0.772,
+     "log_loss": 0.503,
+     "brier": 0.1671
+    },
+    "blend": {
+     "auc": 0.778,
+     "log_loss": 0.4916,
+     "brier": 0.1629
+    }
+   },
+   "plus_filing_day_seats": {
+    "logistic": {
+     "auc": 0.79,
+     "log_loss": 0.4809,
+     "brier": 0.1582
+    },
+    "trees": {
+     "auc": 0.78,
+     "log_loss": 0.4934,
+     "brier": 0.1636
+    },
+    "blend": {
+     "auc": 0.791,
+     "log_loss": 0.4795,
+     "brier": 0.1581
+    }
+   },
+   "LEAKY_any_roll_call_in_session_contrast_only": {
+    "logistic": {
+     "auc": 0.791,
+     "log_loss": 0.4807,
+     "brier": 0.1579
+    },
+    "trees": {
+     "auc": 0.781,
+     "log_loss": 0.4918,
+     "brier": 0.163
+    },
+    "blend": {
+     "auc": 0.792,
+     "log_loss": 0.4783,
+     "brier": 0.1575
+    }
+   },
+   "seat_prior_effect_test_year": {
+    "out_rate_seat_prior": 0.405,
+    "n": 523,
+    "out_rate_known_no_seat_prior": 0.261,
+    "n_no": 750
+   }
+  },
+  "B: 2025-26": {
+   "bills": 4184,
+   "round2_inputs": {
+    "logistic": {
+     "auc": 0.807,
+     "log_loss": 0.4744,
+     "brier": 0.1564
+    },
+    "trees": {
+     "auc": 0.805,
+     "log_loss": 0.4785,
+     "brier": 0.1577
+    },
+    "blend": {
+     "auc": 0.81,
+     "log_loss": 0.47,
+     "brier": 0.1549
+    }
+   },
+   "plus_filing_day_seats": {
+    "logistic": {
+     "auc": 0.812,
+     "log_loss": 0.4708,
+     "brier": 0.1544
+    },
+    "trees": {
+     "auc": 0.819,
+     "log_loss": 0.4624,
+     "brier": 0.1509
+    },
+    "blend": {
+     "auc": 0.82,
+     "log_loss": 0.4606,
+     "brier": 0.1505
+    }
+   },
+   "LEAKY_any_roll_call_in_session_contrast_only": {
+    "logistic": {
+     "auc": 0.813,
+     "log_loss": 0.4682,
+     "brier": 0.1534
+    },
+    "trees": {
+     "auc": 0.816,
+     "log_loss": 0.4653,
+     "brier": 0.152
+    },
+    "blend": {
+     "auc": 0.818,
+     "log_loss": 0.4614,
+     "brier": 0.1508
+    }
+   },
+   "seat_prior_effect_test_year": {
+    "out_rate_seat_prior": 0.403,
+    "n": 1393,
+    "out_rate_known_no_seat_prior": 0.227,
+    "n_no": 2499
+   }
+  }
+ }
+}

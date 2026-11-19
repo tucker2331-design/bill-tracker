@@ -1,0 +1,76 @@
+{
+ "held_out": {
+  "A: 2023-24": {
+   "filing_day_seats": {
+    "logistic": {
+     "auc": 0.79,
+     "log_loss": 0.4809,
+     "brier": 0.1582
+    },
+    "trees": {
+     "auc": 0.78,
+     "log_loss": 0.4934,
+     "brier": 0.1636
+    },
+    "blend": {
+     "auc": 0.791,
+     "log_loss": 0.4795,
+     "brier": 0.1581
+    }
+   },
+   "plus_cosponsor_arm_timing_unverified": {
+    "logistic": {
+     "auc": 0.809,
+     "log_loss": 0.4639,
+     "brier": 0.1521
+    },
+    "trees": {
+     "auc": 0.82,
+     "log_loss": 0.4534,
+     "brier": 0.1488
+    },
+    "blend": {
+     "auc": 0.826,
+     "log_loss": 0.447,
+     "brier": 0.146
+    }
+   }
+  },
+  "B: 2025-26": {
+   "filing_day_seats": {
+    "logistic": {
+     "auc": 0.812,
+     "log_loss": 0.4708,
+     "brier": 0.1544
+    },
+    "trees": {
+     "auc": 0.819,
+     "log_loss": 0.4624,
+     "brier": 0.1509
+    },
+    "blend": {
+     "auc": 0.82,
+     "log_loss": 0.4606,
+     "brier": 0.1505
+    }
+   },
+   "plus_cosponsor_arm_timing_unverified": {
+    "logistic": {
+     "auc": 0.826,
+     "log_loss": 0.4556,
+     "brier": 0.1491
+    },
+    "trees": {
+     "auc": 0.843,
+     "log_loss": 0.4367,
+     "brier": 0.142
+    },
+    "blend": {
+     "auc": 0.84,
+     "log_loss": 0.4373,
+     "brier": 0.1426
+    }
+   }
+  }
+ }
+}

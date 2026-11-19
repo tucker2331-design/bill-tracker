@@ -8,6 +8,20 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] test + decision | PA bill fate level with Virginia; executive site shape decided
+PA fate round 3: committee seats from Open States committee roll calls, FILING-DAY ONLY after Codex #277 (roll calls
+before filing, or the previous session). 2023–24 goes from 0.775 to 0.791 and 2025–26 from 0.807 to 0.820 (clean);
+the leaky any-roll-call version scored the same. With co-sponsors (Virginia's model includes co-patrons; PA's are
+undated) 0.809–0.843, vs Virginia 0.676–0.809 by year. `fillSequence` is not a joined-later flag (26% trailing).
+Owner decided the executive site: two halves (Platform control, owner-only; Client control, reusable, VOT first),
+tiered health by responsibility, executive site for any client with 2+ states, client side behind session-critical
+bill tracking ([[ideas/executive_site]] §7).
+
+## [2026-11-19] pr | #276 merged — PA bill documents + admin-role to-do + executive-site brainstorm (136da07)
+GitHub CI green on d8f270b (Gemini fold-in: one row per URL — 5 duplicates on 2025_0 counted, empty-PN and
+non-numeric-sequence guards, optional www); Codex no findings. `bill-tracker-ca` Cloudflare check red from the
+owner's non-main branch-build setting (commented). PA's next job run writes the Links column (W).
+
 ## [2026-11-19] decision | PA at Virginia's baseline (bill documents), admin role + executive site on the to-do
 Owner asked for PA at VA's baseline, full-screen design links, a per-state admin role to-do, and an executive-site
 brainstorm (justified, operator vs VOT legislative-manager lenses). Done: PA bill page lists the bill's own documents
