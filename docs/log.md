@@ -8,6 +8,12 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-20] pr | #279 merged — going private: Health reads, security headers, tick gate (e836045)
+GitHub CI green on e47cf15 (golden, structural, prepush-audit, mypy, Semgrep, web-build); VA Worker build green;
+`bill-tracker-ca` red from the owner's non-main branch-build setting (commented). Codex 3 × P2 + Gemini 3 folded in.
+Next: watch a week of Actions minutes (expected ~670/month for the ticked jobs), confirm `Tick_Gate` rows appear and
+the page headers are live ([[ideas/going_private]]).
+
 ## [2026-11-20] going private | Tick gate: Cloudflare starts a GitHub job only when a worker is due (A1)
 - Measured 28.5 h: ~11,000 billed Actions min/month, ~9,000 of it from ticked jobs that skip (VA is at daily speed).
   Each worker's gate now writes its next full-cycle time to `Tick_Gate` (`cadence.next_due`, same rule, quiet hours,
