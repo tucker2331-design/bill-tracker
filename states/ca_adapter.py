@@ -112,7 +112,8 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
         # bills appear only after it convenes (Dec 7, 2026). An export with no regular-session bill is that gap, or
         # an upstream fault; either way nothing is written and the sheet keeps the last published session. Said
         # plainly here instead of failing later on an empty session code in the calendar.
-        raise ValueError(f"CA export holds no regular-session bills (session years seen: {years_seen or 'none'}) — "
+        raise ValueError(f"CA export holds no regular-session bills (session years seen: "
+                         f"{', '.join(years_seen) if years_seen else 'none'}) — "
                          f"between sessions or an upstream fault; nothing written, the last published data stands")
     # Measures neither house originates (e.g. GRP, a Governor's Reorganization Plan) are COUNTED, not built: the
     # contract places every bill in a chamber.

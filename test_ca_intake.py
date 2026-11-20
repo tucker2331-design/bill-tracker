@@ -213,7 +213,8 @@ try:
 except ValueError as e:
     _raised = str(e)
 check("an empty export stops with a plain 'between sessions' reason (nothing written)",
-      "no regular-session bills" in _raised and "last published data stands" in _raised, _raised)
+      "no regular-session bills" in _raised and "last published data stands" in _raised and "seen: none" in _raised,
+      _raised)
 
 print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")
 sys.exit(1 if FAILS else 0)
