@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-20] going private | Tick gate: Cloudflare starts a GitHub job only when a worker is due (A1)
+- Measured 28.5 h: ~11,000 billed Actions min/month, ~9,000 of it from ticked jobs that skip (VA is at daily speed).
+  Each worker's gate now writes its next full-cycle time to `Tick_Gate` (`cadence.next_due`, same rule, quiet hours,
+  32 h horizon); `worker/ticks.js` offers only due jobs; any doubt (no SA, unreadable, wrong header, missing row,
+  stale > 33 h) offers every job as before. LIS load unchanged. Tests: cadence 76, ticks 23. Expected ~670 min/month
+  for the three jobs (was ~9,000) ([[ideas/going_private]] A1′, [[knowledge/lis_api_safety]]).
+
 ## [2026-11-20] going private | VA Health reads moved off the browser's GitHub call; security headers
 - A2 fixed: the trust-surface guard (Actions token, actions: read) now also writes `LastRunUTC` + `Recent` (last 10 runs)
   to `Guard_Status`; the Health page reads the job strip and the four outside checks from it through the Worker

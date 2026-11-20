@@ -360,3 +360,66 @@ def serialize_state(now_utc, windows_iso):
         {"lfr": now_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "win": windows_iso},
         ensure_ascii=False, separators=(",", ":"),
     )
+
+
+# --- the tick gate (going private A1, 2026-11-20) ------------------------------------------------------------------
+# WHY: Cloudflare's cron offers both Virginia workers a tick every 15 minutes, and every offer STARTED a GitHub job,
+# even though this gate then skips almost all of them (at the "daily" speed, ~190 of ~192 a day). Measured 2026-11-20
+# over 28.5 h: the two tick-started workflows plus the sentinel that follows each calendar run were ~9,000 of ~11,000
+# billed Actions minutes a month. Free on a public repo; a private repo gets 2,000 (docs/ideas/going_private.md A1).
+# HOW: every time this gate decides (run or skip), the worker also works out WHEN the next full cycle could run and
+# writes it to the Tick_Gate tab; Cloudflare's tick reads that one tab and starts a job only when one is due.
+# The rule stays here, in one place: next_due() asks the SAME classify_tier + should_run, minute by minute, with the
+# same quiet hours. Fail direction (worker/ticks.js): a missing, unreadable or stale row -> dispatch as before.
+QUIET_START_ET, QUIET_END_ET = 23, 6        # 11pm-6am ET: no scheduled full cycles (both workers' quiet hours)
+TICK_GATE_TAB = "Tick_Gate"
+TICK_GATE_HEADER = ["Workflow", "NextDueUTC", "WrittenUTC", "Reason"]
+TICK_GATE_ROWS = {"calendar_worker.yml": 2, "bill_tracker.yml": 3}   # fixed rows: each worker writes only its own
+NEXT_DUE_STEP_MIN = 5                       # resolution; the ticks themselves come every 15 minutes
+NEXT_DUE_HORIZON_H = 32                     # the longest floor (daily, 1435 min = 23.9 h) + the 7 h quiet night = 30.9 h
+
+
+def in_quiet_hours(now_et, start=QUIET_START_ET, end=QUIET_END_ET) -> bool:
+    """True inside the daily quiet window (handles a midnight-spanning window and a within-day one). PURE."""
+    h = now_et.hour
+    return (h >= start or h < end) if start > end else (start <= h < end)
+
+
+def next_due(raw_state, now_utc, floors, last_run_utc, step_min=NEXT_DUE_STEP_MIN, horizon_h=NEXT_DUE_HORIZON_H):
+    """The first instant from now (in `step_min` steps) at which a scheduled tick would run a full cycle: outside
+    quiet hours AND past that instant's tier floor since `last_run_utc`. PURE (the windows come from `raw_state`, the
+    AC1 cell). `last_run_utc` None -> now, outside quiet hours (fail toward freshness, like should_run). Nothing inside
+    the horizon -> now + horizon: a bounded wake-up, never "never"."""
+    windows = parse_state(raw_state)["windows"]
+    t, end = now_utc, now_utc + timedelta(hours=horizon_h)
+    while t < end:
+        t_et = t.astimezone(ET)
+        if not in_quiet_hours(t_et) and should_run(t, last_run_utc, classify_tier(t_et, windows), floors)[0]:
+            return t
+        t += timedelta(minutes=step_min)
+    return end
+
+
+def tick_gate_row(workflow, next_due_utc, now_utc, reason):
+    """One Tick_Gate row: [workflow, next due (UTC ISO), written (UTC ISO), reason]. PURE."""
+    iso = lambda d: d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+    return [workflow, iso(next_due_utc), iso(now_utc), str(reason)[:300]]
+
+
+def write_tick_gate(spreadsheet, workflow, next_due_utc, now_utc, reason):
+    """Write this worker's row of the Tick_Gate tab (I/O; gspread Spreadsheet). Creates the tab on first use. Raises on
+    a Sheets error: the CALLER reports it and carries on (a missing row only means Cloudflare dispatches every tick,
+    as before). Each worker owns a fixed row, so the two never overwrite each other."""
+    import gspread
+    row = TICK_GATE_ROWS[workflow]
+    try:
+        ws = spreadsheet.worksheet(TICK_GATE_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        try:
+            ws = spreadsheet.add_worksheet(title=TICK_GATE_TAB, rows=10, cols=len(TICK_GATE_HEADER))
+        except gspread.exceptions.APIError:
+            ws = spreadsheet.worksheet(TICK_GATE_TAB)   # the other worker created it a moment ago
+    ws.batch_update([
+        {"range": "A1:D1", "values": [TICK_GATE_HEADER]},
+        {"range": f"A{row}:D{row}", "values": [tick_gate_row(workflow, next_due_utc, now_utc, reason)]},
+    ], value_input_option="RAW")

@@ -158,6 +158,18 @@ secret `GH_DISPATCH_TOKEN` (fine-grained token, this repo only, Actions: read & 
 tick logs "not configured" and GitHub's cron remains the only source. The trust-surface guard still judges
 liveness on GitHub's `schedule` runs.
 
+### The tick gate: a tick starts a GitHub job only when one is due (2026-11-20)
+Every Cloudflare offer used to START a GitHub job, and the worker's own gate then skipped almost all of them (at the
+"daily" speed ~190 of ~192 a day). Measured over 28.5 h on 2026-11-19/20: the two ticked workflows plus the accuracy
+sentinel that follows each calendar run were ~9,000 of ~11,000 billed Actions minutes a month. Free on a public repo; a
+private repo gets 2,000 ([[ideas/going_private]] A1). Now, every time a worker's gate decides (run or skip), it also
+writes WHEN its next full cycle could run to the **`Tick_Gate`** tab (`cadence.next_due` asks the same
+`classify_tier` + `should_run` in 5-minute steps, with quiet hours; one fixed row per workflow). `worker/ticks.js`
+reads that tab with the service account and offers only the jobs that are due (up to a minute early).
+**LIS load is unchanged** (the worker's gate still decides every cycle). **Fail direction:** no service account, an
+unreadable tab, a wrong header, a missing row, an unparseable time or a row older than 33 h (the 32 h horizon + 1)
+-> that job is offered every tick, exactly as before. GitHub's own `*/15` cron stays on as the second tick source.
+
 ### The speed switch (2026-11-16; four speeds 2026-11-18)
 Owner 2026-11-18: *"once a day should be the longest cadence, then a 4 hour version, then a super fast, then an
 instant — all within the terms and rules."* `cadence_profiles.json` (repo root) holds one word per state, read every

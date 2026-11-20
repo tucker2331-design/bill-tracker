@@ -191,4 +191,34 @@ ok(c.JOB_HOURS["daily"] == 24 and c.JOB_HOURS["4h"] == 4 and c.JOB_HOURS["fast"]
    "jobs with no tiers: daily 24 h, 4h 4 h, fast/instant every tick")
 ok(all(c.profile_for(st) in c.KNOWN_PROFILES for st in ("VA", "PA", "CA", "NY")), "the committed file parses for every state")
 
+# --- tick gate: next_due (going private A1, 2026-11-20) --------------------------------------------------------------
+daily = c.SPEED_FLOORS["daily"]
+now10 = utc(2026, 11, 20, 15, 0)                       # 10:00 ET (EST, UTC-5)
+ok(c.next_due("", now10, daily, now10) == now10 + timedelta(minutes=1435), "daily: just ran -> next due one floor later")
+ok(c.next_due("", now10, daily, None) == now10, "no marker -> due now (fail toward freshness)")
+ok(c.next_due("", utc(2026, 11, 20, 8, 0), daily, None) == utc(2026, 11, 20, 11, 0),
+   "3am ET with no marker -> due when quiet hours end (6am ET)")
+ok(c.next_due("", utc(2026, 11, 20, 4, 30), daily, utc(2026, 11, 20, 4, 30)) == utc(2026, 11, 21, 11, 0),
+   "a floor that ends inside quiet hours -> due at 6am ET")
+ok(c.next_due("", utc(2026, 11, 20, 3, 0), daily, utc(2026, 11, 20, 3, 0)) == utc(2026, 11, 21, 2, 55),
+   "a floor that ends at 9:55pm ET -> due then (before quiet hours)")
+meeting = c.serialize_state(now10, [["2026-11-20T09:30:00", "2026-11-20T12:00:00"]])
+fast = c.CALENDAR_TIER_FLOORS
+ok(c.next_due(meeting, now10, fast, now10) == now10 + timedelta(minutes=15),
+   "fast speed inside a meeting window -> the next 15-minute tick (12-minute floor)")
+ok(c.next_due(meeting, utc(2026, 11, 20, 17, 30), fast, utc(2026, 11, 20, 17, 30)) ==
+   utc(2026, 11, 20, 17, 30) + timedelta(minutes=185), "after the last meeting window -> the EMPTY floor (185 min)")
+huge = {"IN_WINDOW": 99999, "IDLE": 99999, "EMPTY": 99999}
+ok(c.next_due("", now10, huge, now10) == now10 + timedelta(hours=c.NEXT_DUE_HORIZON_H),
+   "nothing inside the horizon -> a bounded wake-up, never 'never'")
+ok(c.next_due("{bad json", now10, daily, None) == now10, "a malformed AC1 still answers (no windows, fail toward freshness)")
+ok(c.in_quiet_hours(et(2026, 11, 20, 23, 0)) and c.in_quiet_hours(et(2026, 11, 20, 5, 59)), "23:00 and 05:59 ET are quiet")
+ok(not c.in_quiet_hours(et(2026, 11, 20, 6, 0)) and not c.in_quiet_hours(et(2026, 11, 20, 22, 59)), "06:00 and 22:59 ET are not")
+ok(c.in_quiet_hours(et(2026, 11, 20, 2, 0), start=1, end=5) and not c.in_quiet_hours(et(2026, 11, 20, 6, 0), start=1, end=5),
+   "a within-day quiet window also works")
+ok(c.tick_gate_row("bill_tracker.yml", now10, now10, "x" * 400) ==
+   ["bill_tracker.yml", "2026-11-20T15:00:00Z", "2026-11-20T15:00:00Z", "x" * 300], "row shape, UTC ISO, reason capped")
+ok(set(c.TICK_GATE_ROWS) == {"calendar_worker.yml", "bill_tracker.yml"} and len(set(c.TICK_GATE_ROWS.values())) == 2,
+   "one fixed row per ticked workflow")
+
 print(f"ALL {_checks} cadence tests passed")

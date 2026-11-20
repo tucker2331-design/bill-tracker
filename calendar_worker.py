@@ -8751,13 +8751,25 @@ if __name__ == "__main__":
                 _cad_gc = sheets_retry.authorize(Credentials.from_service_account_info(
                     json.loads(_cad_creds),
                     scopes=["https://www.googleapis.com/auth/spreadsheets"]))
-                _raw_cadence = _cad_gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1").acell(
-                    cadence.CADENCE_STATE_CELL).value
+                _cad_sheet = _cad_gc.open_by_key(SPREADSHEET_ID)
+                _raw_cadence = _cad_sheet.worksheet("Sheet1").acell(cadence.CADENCE_STATE_CELL).value
+                # the calendar worker is Virginia's own (its VA logic splits out at the calendar<->product merge)
+                _cad_floors = cadence.floors_for("calendar", "VA")
+                _cad_now = datetime.now(pytz.utc)
                 _run_now, _tier, _why = cadence.decide(
-                    _raw_cadence, datetime.now(pytz.utc),
-                    # the calendar worker is Virginia's own (its VA logic splits out at the calendar<->product merge)
-                    datetime.now(pytz.timezone("America/New_York")), cadence.floors_for("calendar", "VA"))
+                    _raw_cadence, _cad_now, datetime.now(pytz.timezone("America/New_York")), _cad_floors)
                 print(f"⏱️ Cadence gate (guardrail #5): {_why}")
+                # Tick gate (going private A1): publish WHEN the next full cycle could run, so Cloudflare's tick
+                # starts a GitHub job only then (cadence.next_due asks this same gate). A failed write is reported
+                # and harmless: without a fresh row the tick dispatches every 15 minutes, exactly as before.
+                try:
+                    _cad_last = _cad_now if _run_now else cadence.parse_state(_raw_cadence)["lfr"]
+                    _cad_next = cadence.next_due(_raw_cadence, _cad_now, _cad_floors, _cad_last)
+                    cadence.write_tick_gate(_cad_sheet, "calendar_worker.yml", _cad_next, _cad_now, _why)
+                    print(f"⏱️ Tick gate: next calendar cycle due {_cad_next:%Y-%m-%d %H:%M} UTC")
+                except Exception as _tg_err:   # audited: categorized + printed; the gate decision above stands
+                    print(f"⚠️ [API_FAILURE] Tick gate write failed ({type(_tg_err).__name__}: {_tg_err}) — "
+                          f"Cloudflare dispatches every tick until it is written.")
                 if not _run_now:
                     sys.exit(0)
         except SystemExit:

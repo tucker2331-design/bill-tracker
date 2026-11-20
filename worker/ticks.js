@@ -18,7 +18,54 @@
  * nothing (GitHub's cron still runs). A failed dispatch is logged with its status and body and re-thrown so
  * Cloudflare records the cron run as failed -- never swallowed.
  */
+import { gvizUrl, serviceToken } from "./sheets.js";
+import { parseCsv } from "./alerts.js";
+
 export const TICK_WORKFLOWS = ["calendar_worker.yml", "bill_tracker.yml"];
+
+// ── The tick gate (going private A1, 2026-11-20) ─────────────────────────────────────────────────────────────────
+// Every offer used to START a GitHub job, and the worker then skipped almost all of them (~190 of ~192 a day at the
+// "daily" speed): ~9,000 of ~11,000 billed Actions minutes a month, measured 2026-11-20. Free while the repo is public,
+// but a private repo gets 2,000 (docs/ideas/going_private.md A1). Each worker now writes, every time its own gate
+// decides, WHEN its next full cycle could run (cadence.next_due -> the Tick_Gate tab). This reads that tab and starts
+// only the jobs that are due. The rule lives in ONE place (cadence.py); this only compares two times.
+// FAIL DIRECTION (unchanged behaviour on any doubt): no service account, an unreadable tab, a wrong header, a missing
+// row, an unparseable time, or a row older than STALE_HOURS -> that job is offered, exactly as before.
+export const TICK_GATE_TAB = "Tick_Gate";
+export const TICK_GATE_HEADER = ["Workflow", "NextDueUTC", "WrittenUTC", "Reason"];   // cadence.TICK_GATE_HEADER
+export const STALE_HOURS = 33;     // cadence.NEXT_DUE_HORIZON_H (32) + 1: a row is always rewritten by its own due time
+export const EARLY_MS = 60_000;    // offer a job up to a minute early (a tick lands on the quarter hour)
+
+/** Which ticked workflows are due now. PURE. `rows` = the Tick_Gate CSV (header first), or null if unread. */
+export function dueWorkflows(rows, nowMs) {
+  const all = (why) => ({ due: TICK_WORKFLOWS.map((wf) => ({ wf, why })), skipped: [], gate: "unavailable" });
+  if (!Array.isArray(rows) || !rows.length) return all("no readable Tick_Gate tab");
+  if (TICK_GATE_HEADER.some((h, i) => ((rows[0] || [])[i] || "").trim() !== h)) return all("Tick_Gate header is not ours");
+  const byWf = new Map(rows.slice(1).map((r) => [((r || [])[0] || "").trim(), r]));
+  const due = [], skipped = [];
+  for (const wf of TICK_WORKFLOWS) {
+    const r = byWf.get(wf);
+    const next = r ? Date.parse((r[1] || "").trim()) : NaN;
+    const written = r ? Date.parse((r[2] || "").trim()) : NaN;
+    if (!r) due.push({ wf, why: "no gate row yet" });
+    else if (!Number.isFinite(next) || !Number.isFinite(written)) due.push({ wf, why: "gate row unreadable" });
+    else if (nowMs - written > STALE_HOURS * 3.6e6) due.push({ wf, why: `gate row stale (written ${r[2].trim()})` });
+    else if (nowMs >= next - EARLY_MS) due.push({ wf, why: `due ${r[1].trim()}` });
+    else skipped.push({ wf, why: `next due ${r[1].trim()}` });
+  }
+  return { due, skipped, gate: "ok" };
+}
+
+/** Read the Tick_Gate tab with the Worker's service account. null = not configured here; throws on a failed read. */
+export async function readTickGate(env, fetchFn = fetch) {
+  if (!env.SPREADSHEET_ID || !env.GCP_SA_JSON) return null;
+  const token = await serviceToken(env);
+  const res = await fetchFn(gvizUrl(env.SPREADSHEET_ID, { tab: TICK_GATE_TAB, range: "A1:D4", headers: "0" }),
+    { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Tick_Gate read HTTP ${res.status}`);
+  if (!(res.headers.get("content-type") || "").includes("csv")) throw new Error("Tick_Gate read was not CSV (sign-in page?)");
+  return parseCsv(await res.text());
+}
 export const REPO = "tucker2331-design/bill-tracker";
 
 /** The one dispatch request per workflow. Pure; tested in worker/test_ticks.mjs. */
@@ -44,7 +91,7 @@ export function dispatchRequest(workflow, token, ref = "main") {
 // Read from the Worker's own BILL_TRACKER_STATE var (wrangler.toml "VA", wrangler.pa.toml "PA") -- config, not a guess.
 export const TICK_STATE = "VA";
 
-export async function offerTicks(env, fetchFn = fetch) {
+export async function offerTicks(env, fetchFn = fetch, readGate = readTickGate) {
   if (env.BILL_TRACKER_STATE !== TICK_STATE) {
     if (env.GH_DISPATCH_TOKEN) console.error(`ticks_misplaced: GH_DISPATCH_TOKEN is set on the ${env.BILL_TRACKER_STATE || "unknown-state"} Worker; it is ignored -- only the ${TICK_STATE} Worker starts Virginia's jobs. Remove it.`);
     return { dispatched: [], failed: [], configured: false };
@@ -53,8 +100,18 @@ export async function offerTicks(env, fetchFn = fetch) {
     console.log("ticks: GH_DISPATCH_TOKEN not configured -- no dispatch (GitHub's own cron still runs)");
     return { dispatched: [], failed: [], configured: false };
   }
+  let rows = null, gateErr = "";
+  try {
+    rows = await readGate(env, fetchFn);
+  } catch (err) {
+    gateErr = err && err.message ? err.message : String(err);
+    console.error("tick_gate_unreadable", gateErr);   // logged, then every job is offered (the old behaviour)
+  }
+  const plan = dueWorkflows(rows, Date.now());
+  for (const s of plan.skipped) console.log(`ticks: ${s.wf} not offered (${s.why})`);
+  if (plan.gate !== "ok") console.log(`ticks: gate unavailable (${gateErr || plan.due[0].why}) -- offering every job`);
   const dispatched = [], failed = [];
-  for (const wf of TICK_WORKFLOWS) {
+  for (const { wf } of plan.due) {
     const { url, init } = dispatchRequest(wf, env.GH_DISPATCH_TOKEN);
     try {
       const res = await fetchFn(url, init);
@@ -65,6 +122,6 @@ export async function offerTicks(env, fetchFn = fetch) {
     }
   }
   if (failed.length) console.error("ticks_failed", failed.join(" | "));
-  else console.log(`ticks: offered ${dispatched.join(", ")}`);
-  return { dispatched, failed, configured: true };
+  else console.log(`ticks: offered ${dispatched.join(", ") || "nothing (nothing due)"}`);
+  return { dispatched, failed, skipped: plan.skipped.map((x) => x.wf), configured: true, gate: plan.gate };
 }

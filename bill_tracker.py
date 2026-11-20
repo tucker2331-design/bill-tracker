@@ -1390,11 +1390,21 @@ def _cadence_should_run():
             print(f"⚠️ Cadence: couldn't read {BILL_TRACKER_TAB}!{cadence.BILL_LAST_RUN_CELL} "
                   f"({type(_u1_err).__name__}: {_u1_err}) — treating as no marker (will run).")
             last_raw = None
+        floors, now_utc, last_marker = cadence.floors_for("bill", STATE.code), datetime.datetime.now(pytz.utc), \
+            cadence.parse_marker(last_raw)
         run, tier, why = cadence.decide(
-            raw_state, datetime.datetime.now(pytz.utc),
-            datetime.datetime.now(pytz.timezone(STATE.timezone)),
-            cadence.floors_for("bill", STATE.code), last_run_utc=cadence.parse_marker(last_raw))
+            raw_state, now_utc, datetime.datetime.now(pytz.timezone(STATE.timezone)), floors, last_run_utc=last_marker)
         print(f"⏱️ Cadence gate (guardrail #5): {why}")
+        # Tick gate (going private A1; mirrors calendar_worker __main__): publish WHEN the next full cycle could run, so
+        # Cloudflare's tick starts a GitHub job only then. A failed write is reported and harmless (the tick then
+        # dispatches every 15 minutes, as before) and never changes this decision.
+        try:
+            nxt = cadence.next_due(raw_state, now_utc, floors, now_utc if run else last_marker)
+            cadence.write_tick_gate(sheet, "bill_tracker.yml", nxt, now_utc, why)
+            print(f"⏱️ Tick gate: next bill cycle due {nxt:%Y-%m-%d %H:%M} UTC")
+        except Exception as tg_err:   # audited: categorized alert; the gate decision above stands
+            _alert("WARN", "API_FAILURE", f"tick gate write failed ({type(tg_err).__name__}: {tg_err}) — Cloudflare "
+                   f"dispatches every tick until it is written.")
         return run
     except Exception as e:
         # Fail OPEN (run), but ROUTE the error through the categorized alerter — not just print (Qodo #198):
