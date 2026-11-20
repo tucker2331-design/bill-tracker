@@ -1096,6 +1096,21 @@ def build_bill_records(http_session, session_code, extras=None):
     return records, completeness
 
 
+def _publish_bill_tick_after_success(sheet):
+    """Tick gate, success path (going private A1, Codex #279): THIS cycle succeeded, so the bill's Tick_Gate row moves
+    forward from the cycle's START, using the shared meeting windows (Sheet1!AC1). Non-fatal: a failure is alerted
+    and only means Cloudflare offers every tick until the row is written."""
+    try:
+        raw_state = sheet.worksheet("Sheet1").acell(cadence.CADENCE_STATE_CELL).value
+        now_utc = datetime.datetime.now(pytz.utc)
+        nxt = cadence.next_due(raw_state, now_utc, cadence.floors_for("bill", STATE.code), CYCLE_START_UTC)
+        cadence.write_tick_gate(sheet, "bill_tracker.yml", nxt, now_utc, "full cycle succeeded")
+        print(f"⏱️ Tick gate: next bill cycle due {nxt:%Y-%m-%d %H:%M} UTC")
+    except Exception as e:   # audited: categorized alert; the cycle's own writes are already done
+        _alert("WARN", "API_FAILURE", f"tick gate write after the cycle failed ({type(e).__name__}: {e}) — Cloudflare "
+               f"dispatches every tick until it is written.")
+
+
 def write_bill_tracker(records, completeness):
     """Write records + a completeness summary to the Bill_Tracker tab (create if missing).
     Resizes the grid first — gspread.update does NOT auto-expand and errors past the grid.
@@ -1183,6 +1198,7 @@ def write_bill_tracker(records, completeness):
         {"range": cadence.BILL_LAST_RUN_CELL,
          "values": [[CYCLE_START_UTC.strftime("%Y-%m-%dT%H:%M:%SZ")]]},   # the cycle's START (cadence.py)
     ])
+    _publish_bill_tick_after_success(sheet)
     return prior_unverified, prior_universe, sheet
 
 
@@ -1396,10 +1412,12 @@ def _cadence_should_run():
             raw_state, now_utc, datetime.datetime.now(pytz.timezone(STATE.timezone)), floors, last_run_utc=last_marker)
         print(f"⏱️ Cadence gate (guardrail #5): {why}")
         # Tick gate (going private A1; mirrors calendar_worker __main__): publish WHEN the next full cycle could run, so
-        # Cloudflare's tick starts a GitHub job only then. A failed write is reported and harmless (the tick then
-        # dispatches every 15 minutes, as before) and never changes this decision.
+        # Cloudflare's tick starts a GitHub job only then. From the LAST SUCCESSFUL marker, never this cycle's: a due
+        # cycle that then fails leaves the row "due" and the next tick retries (Codex #279); the row moves forward in
+        # write_bill_tracker on success. A failed write is reported and harmless (the tick then dispatches every
+        # 15 minutes, as before) and never changes this decision.
         try:
-            nxt = cadence.next_due(raw_state, now_utc, floors, now_utc if run else last_marker)
+            nxt = cadence.next_due(raw_state, now_utc, floors, last_marker)
             cadence.write_tick_gate(sheet, "bill_tracker.yml", nxt, now_utc, why)
             print(f"⏱️ Tick gate: next bill cycle due {nxt:%Y-%m-%d %H:%M} UTC")
         except Exception as tg_err:   # audited: categorized alert; the gate decision above stands

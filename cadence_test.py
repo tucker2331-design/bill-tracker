@@ -221,4 +221,6 @@ ok(c.tick_gate_row("bill_tracker.yml", now10, now10, "x" * 400) ==
 ok(set(c.TICK_GATE_ROWS) == {"calendar_worker.yml", "bill_tracker.yml"} and len(set(c.TICK_GATE_ROWS.values())) == 2,
    "one fixed row per ticked workflow")
 
+ok(c.next_due("", now10, daily, now10 - timedelta(hours=25)) == now10,
+   "the gate row uses the LAST SUCCESSFUL marker: a due cycle that then fails stays due, so the next tick retries (Codex #279)")
 print(f"ALL {_checks} cadence tests passed")

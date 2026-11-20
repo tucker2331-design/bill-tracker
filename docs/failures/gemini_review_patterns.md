@@ -540,3 +540,23 @@ fails loudly: a malformed JSON raises, a missing key raises, and a district/shap
 ### Semgrep house rule: `except …: continue`
 The tree scan skipped a tracked path missing from disk with a bare `continue` in the handler. Fixed: counted and
 printed as a note (Standard #4 / source-miss visibility).
+
+## 2026-11-20 — PR #279 (going private: tick gate, Health reads, headers). Codex 3 × P2.
+
+### A "next due" published before the work it depends on
+The tick gate wrote the next due time as if the cycle had already succeeded. If the cycle then failed, the success
+marker stayed old but the gate said "not due for ~24 h", so the retry that the old marker allowed never came. **Rule:
+anything that suppresses retries is advanced on the success path only.** Fixed: the pre-cycle row uses the last
+successful marker; the row moves forward after AC1 / Z1 are written.
+
+### A cached decision that does not move when its inputs change
+The deadline was computed from the previous cycle's meeting windows; a cycle that discovered a meeting 30 minutes
+out left a 185-minute deadline in place, for the calendar and the bill alike. **Rule: when you cache a decision,
+list every input and refresh the cache wherever any of them is written.** Fixed: after AC1 is written the calendar
+recomputes its row and resets the bill row to "due".
+
+### Worker code does not run for static assets
+With asset-first routing, requests for existing files (the pages) never reach the Worker's fetch handler, so
+headers set there covered only /api. **Fixed:** `web/public/_headers` carries the same set (a test keeps the two
+identical).
+

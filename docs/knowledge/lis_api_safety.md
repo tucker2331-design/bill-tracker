@@ -169,6 +169,10 @@ reads that tab with the service account and offers only the jobs that are due (u
 **LIS load is unchanged** (the worker's gate still decides every cycle). **Fail direction:** no service account, an
 unreadable tab, a wrong header, a missing row, an unparseable time or a row older than 33 h (the 32 h horizon + 1)
 -> that job is offered every tick, exactly as before. GitHub's own `*/15` cron stays on as the second tick source.
+**The row moves forward only after success (Codex #279):** the gate computes it from the LAST SUCCESSFUL marker, so a
+due cycle that fails stays due and the next tick retries; on the success path the calendar rewrites its row from the
+cycle's start with the windows it just wrote, and resets the bill row to "due" (the windows may have changed; the
+bill's own gate then rewrites its row). The bill rewrites its row after its own successful write.
 
 ### The speed switch (2026-11-16; four speeds 2026-11-18)
 Owner 2026-11-18: *"once a day should be the longest cadence, then a 4 hour version, then a super fast, then an

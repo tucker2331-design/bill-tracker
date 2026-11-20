@@ -8581,12 +8581,29 @@ def run_calendar_update():
                         datetime.now(pytz.timezone("America/New_York")))
                     if worksheet.col_count < 29:
                         worksheet.add_cols(29 - worksheet.col_count)
-                    worksheet.update_acell(
-                        cadence.CADENCE_STATE_CELL, cadence.serialize_state(CYCLE_START_UTC, _cad_windows))
+                    _cad_new_state = cadence.serialize_state(CYCLE_START_UTC, _cad_windows)
+                    worksheet.update_acell(cadence.CADENCE_STATE_CELL, _cad_new_state)
                     print(f"⏱️ Cadence state (AC1) written: {_cad_stats['windows']} forward window(s) from "
                           f"{_cad_stats['parsed']} concrete meeting rows "
                           f"({_cad_stats['skipped']} unparseable, {_cad_stats['dropped_past']} past, "
                           f"{_cad_stats['dropped_horizon']} beyond horizon).")
+                    # Tick gate, success path (going private A1, Codex #279): THIS cycle succeeded, so the calendar's
+                    # row moves forward from its START, using the windows just written. The bill row is reset to
+                    # "due" (first moment outside quiet hours): the shared windows may have changed (a meeting found
+                    # 30 minutes out), and only the bill's own gate knows its marker; it rewrites its row on that tick.
+                    try:
+                        _tg_now = datetime.now(pytz.utc)
+                        cadence.write_tick_gate(
+                            sheet, "calendar_worker.yml",
+                            cadence.next_due(_cad_new_state, _tg_now, cadence.floors_for("calendar", "VA"),
+                                             CYCLE_START_UTC), _tg_now, "full cycle succeeded")
+                        cadence.write_tick_gate(
+                            sheet, "bill_tracker.yml",
+                            cadence.next_due(_cad_new_state, _tg_now, cadence.floors_for("bill", "VA"), None),
+                            _tg_now, "calendar windows refreshed: bill gate re-checks")
+                    except Exception as _tg_err:   # audited: categorized + printed; AC1 is already written
+                        print(f"⚠️ [API_FAILURE] Tick gate write after the cycle failed ({type(_tg_err).__name__}: "
+                              f"{_tg_err}) — Cloudflare dispatches every tick until it is written.")
                 except Exception as _cad_write_err:
                     push_system_alert(
                         f"Could not write cadence-state cell Sheet1!AC1 after successful cycle: {_cad_write_err}",
@@ -8760,10 +8777,13 @@ if __name__ == "__main__":
                     _raw_cadence, _cad_now, datetime.now(pytz.timezone("America/New_York")), _cad_floors)
                 print(f"⏱️ Cadence gate (guardrail #5): {_why}")
                 # Tick gate (going private A1): publish WHEN the next full cycle could run, so Cloudflare's tick
-                # starts a GitHub job only then (cadence.next_due asks this same gate). A failed write is reported
-                # and harmless: without a fresh row the tick dispatches every 15 minutes, exactly as before.
+                # starts a GitHub job only then (cadence.next_due asks this same gate). Computed from the LAST
+                # SUCCESSFUL cycle's marker, never from this one: if this cycle is due and then fails, the row stays
+                # "due" and the next tick retries (Codex #279). The row moves forward only on the success path
+                # (after AC1 is written, below). A failed write is reported and harmless: without a fresh row the
+                # tick dispatches every 15 minutes, exactly as before.
                 try:
-                    _cad_last = _cad_now if _run_now else cadence.parse_state(_raw_cadence)["lfr"]
+                    _cad_last = cadence.parse_state(_raw_cadence)["lfr"]
                     _cad_next = cadence.next_due(_raw_cadence, _cad_now, _cad_floors, _cad_last)
                     cadence.write_tick_gate(_cad_sheet, "calendar_worker.yml", _cad_next, _cad_now, _why)
                     print(f"⏱️ Tick gate: next calendar cycle due {_cad_next:%Y-%m-%d %H:%M} UTC")

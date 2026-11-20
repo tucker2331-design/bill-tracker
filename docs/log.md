@@ -14,6 +14,8 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
   32 h horizon); `worker/ticks.js` offers only due jobs; any doubt (no SA, unreadable, wrong header, missing row,
   stale > 33 h) offers every job as before. LIS load unchanged. Tests: cadence 76, ticks 23. Expected ~670 min/month
   for the three jobs (was ~9,000) ([[ideas/going_private]] A1′, [[knowledge/lis_api_safety]]).
+- #279 Codex 3 × P2 folded in: the gate row moves forward only after a successful cycle; new meeting windows
+  refresh the calendar row and reset the bill row; `web/public/_headers` puts the headers on the pages too.
 
 ## [2026-11-20] going private | VA Health reads moved off the browser's GitHub call; security headers
 - A2 fixed: the trust-surface guard (Actions token, actions: read) now also writes `LastRunUTC` + `Recent` (last 10 runs)
