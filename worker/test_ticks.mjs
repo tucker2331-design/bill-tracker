@@ -38,7 +38,10 @@ is("failures are logged, never swallowed", errs.filter((e) => e.startsWith("tick
 
 // ── the tick gate (going private A1): start a GitHub job only when the worker's own gate says one is due ──
 const NOW = Date.parse("2026-11-20T15:07:00Z");
-const H = TICK_GATE_HEADER;
+// Pinned as LITERALS (Gemini #279): the header is a contract the Python workers write (cadence.TICK_GATE_HEADER, pinned
+// the same way in cadence_test.py). A rename must break a test on both sides, never pass silently on one.
+const H = ["Workflow", "NextDueUTC", "WrittenUTC", "Reason"];
+is("the JS header is the pinned contract", TICK_GATE_HEADER, H);
 const row = (wf, next, written = "2026-11-20T15:00:00Z") => [wf, next, written, "reason"];
 const both = (a, b) => [H, row("calendar_worker.yml", a), row("bill_tracker.yml", b)];
 const d1 = dueWorkflows(both("2026-11-21T14:55:00Z", "2026-11-20T15:05:00Z"), NOW);

@@ -223,4 +223,7 @@ ok(set(c.TICK_GATE_ROWS) == {"calendar_worker.yml", "bill_tracker.yml"} and len(
 
 ok(c.next_due("", now10, daily, now10 - timedelta(hours=25)) == now10,
    "the gate row uses the LAST SUCCESSFUL marker: a due cycle that then fails stays due, so the next tick retries (Codex #279)")
+ok(c.TICK_GATE_HEADER == ["Workflow", "NextDueUTC", "WrittenUTC", "Reason"],
+   "Tick_Gate header pinned as literals: worker/ticks.js reads exactly these (pinned the same way in test_ticks.mjs)")
+ok(c.TICK_GATE_TAB == "Tick_Gate", "tab name pinned (worker/ticks.js TICK_GATE_TAB)")
 print(f"ALL {_checks} cadence tests passed")

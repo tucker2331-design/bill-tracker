@@ -560,3 +560,10 @@ With asset-first routing, requests for existing files (the pages) never reach th
 headers set there covered only /api. **Fixed:** `web/public/_headers` carries the same set (a test keeps the two
 identical).
 
+### Gemini (same PR): narrow the tick-gate catches — accepted, and the block moved
+Gemini asked the tick-gate writes to catch Sheets errors only, not `Exception` (case law #105). Accepted: they now
+catch `TICK_GATE_IO_ERRORS` (gspread, requests, google-auth). A bug in `cadence.next_due` now reaches the gate's
+own fail-open handler (labelled "cadence gate error") or fails the cycle loudly. The success-path write also moved
+OUT of the AC1 try, so a tick-gate problem can never be reported as an AC1 write failure. Its other note, pin the
+Tick_Gate header as literals in the tests, is done on both sides (JS and Python), since the header is a contract.
+

@@ -7,6 +7,7 @@ import threading
 import hashlib
 import requests
 import gspread
+import google.auth.exceptions
 import sheets_retry   # Sheets 429: wait and retry, counted (2026-11-01 lost writes)
 import pandas as pd
 import re
@@ -28,6 +29,10 @@ import logging
 import cadence   # LIS-safety guardrail #5 (activity-correlated cadence) — pure module, no back-import
 # When this cycle STARTED (process start, before jitter) -- the cadence marker in AC1 (cadence.IN_WINDOW_MIN_INTERVAL).
 CYCLE_START_UTC = datetime.now(timezone.utc)
+# The failures a Tick_Gate write can EXPECT (Sheets API, network, auth). Anything else is a bug and fails loudly
+# (case law #105: a broad except dressed a programming error as an API outage). Gemini #279.
+TICK_GATE_IO_ERRORS = (gspread.exceptions.GSpreadException, requests.exceptions.RequestException,
+                       google.auth.exceptions.GoogleAuthError)
 
 # pdfminer (pdfplumber's parsing engine) emits a "Could not get FontBBox from
 # font descriptor" WARNING for every malformed font in a parsed agenda PDF —
@@ -8571,6 +8576,7 @@ def run_calendar_update():
                 # that could permanently suppress it. Windows are built from the SAME concrete-time meeting
                 # rows the site shows (Origin in CONCRETE_ORIGINS, non-placeholder Time) — STRUCTURAL, no
                 # text/keyword (Standard #3). Non-fatal: a write failure alerts but never aborts the cycle.
+                _cad_ac1_state = None
                 try:
                     _cad_concrete = final_df[
                         final_df['Origin'].isin(cadence.CONCRETE_ORIGINS)
@@ -8583,27 +8589,11 @@ def run_calendar_update():
                         worksheet.add_cols(29 - worksheet.col_count)
                     _cad_new_state = cadence.serialize_state(CYCLE_START_UTC, _cad_windows)
                     worksheet.update_acell(cadence.CADENCE_STATE_CELL, _cad_new_state)
+                    _cad_ac1_state = _cad_new_state      # AC1 is written: the tick gate below may move forward
                     print(f"⏱️ Cadence state (AC1) written: {_cad_stats['windows']} forward window(s) from "
                           f"{_cad_stats['parsed']} concrete meeting rows "
                           f"({_cad_stats['skipped']} unparseable, {_cad_stats['dropped_past']} past, "
                           f"{_cad_stats['dropped_horizon']} beyond horizon).")
-                    # Tick gate, success path (going private A1, Codex #279): THIS cycle succeeded, so the calendar's
-                    # row moves forward from its START, using the windows just written. The bill row is reset to
-                    # "due" (first moment outside quiet hours): the shared windows may have changed (a meeting found
-                    # 30 minutes out), and only the bill's own gate knows its marker; it rewrites its row on that tick.
-                    try:
-                        _tg_now = datetime.now(pytz.utc)
-                        cadence.write_tick_gate(
-                            sheet, "calendar_worker.yml",
-                            cadence.next_due(_cad_new_state, _tg_now, cadence.floors_for("calendar", "VA"),
-                                             CYCLE_START_UTC), _tg_now, "full cycle succeeded")
-                        cadence.write_tick_gate(
-                            sheet, "bill_tracker.yml",
-                            cadence.next_due(_cad_new_state, _tg_now, cadence.floors_for("bill", "VA"), None),
-                            _tg_now, "calendar windows refreshed: bill gate re-checks")
-                    except Exception as _tg_err:   # audited: categorized + printed; AC1 is already written
-                        print(f"⚠️ [API_FAILURE] Tick gate write after the cycle failed ({type(_tg_err).__name__}: "
-                              f"{_tg_err}) — Cloudflare dispatches every tick until it is written.")
                 except Exception as _cad_write_err:
                     push_system_alert(
                         f"Could not write cadence-state cell Sheet1!AC1 after successful cycle: {_cad_write_err}",
@@ -8612,6 +8602,25 @@ def run_calendar_update():
                         severity="WARN",
                         dedup_key="state_cell_ac1_write_fail",
                     )
+                # Tick gate, success path (going private A1, Codex #279): only once AC1 holds THIS cycle's start does the
+                # calendar's row move forward, from that start, with the windows just written. The bill row is reset to
+                # "due" (first moment outside quiet hours): the shared windows may have changed (a meeting found 30
+                # minutes out), and only the bill's own gate knows its marker; it rewrites its row on that tick.
+                # Outside the AC1 try on purpose: a bug here must not be reported as an AC1 write failure (#105).
+                if _cad_ac1_state is not None:
+                    try:
+                        _tg_now = datetime.now(pytz.utc)
+                        cadence.write_tick_gate(
+                            sheet, "calendar_worker.yml",
+                            cadence.next_due(_cad_ac1_state, _tg_now, cadence.floors_for("calendar", "VA"),
+                                             CYCLE_START_UTC), _tg_now, "full cycle succeeded")
+                        cadence.write_tick_gate(
+                            sheet, "bill_tracker.yml",
+                            cadence.next_due(_cad_ac1_state, _tg_now, cadence.floors_for("bill", "VA"), None),
+                            _tg_now, "calendar windows refreshed: bill gate re-checks")
+                    except TICK_GATE_IO_ERRORS as _tg_err:   # audited: categorized + printed; AC1 is already written
+                        print(f"⚠️ [API_FAILURE] Tick gate write after the cycle failed ({type(_tg_err).__name__}: "
+                              f"{_tg_err}) — Cloudflare dispatches every tick until it is written.")
 
                 # Stage-2 (OBSERVE-ONLY): compute this cycle's input signature from the
                 # still-in-scope inputs, LOG whether it matches last cycle's (i.e. whether
@@ -8787,7 +8796,7 @@ if __name__ == "__main__":
                     _cad_next = cadence.next_due(_raw_cadence, _cad_now, _cad_floors, _cad_last)
                     cadence.write_tick_gate(_cad_sheet, "calendar_worker.yml", _cad_next, _cad_now, _why)
                     print(f"⏱️ Tick gate: next calendar cycle due {_cad_next:%Y-%m-%d %H:%M} UTC")
-                except Exception as _tg_err:   # audited: categorized + printed; the gate decision above stands
+                except TICK_GATE_IO_ERRORS as _tg_err:   # audited: categorized + printed; the gate decision stands
                     print(f"⚠️ [API_FAILURE] Tick gate write failed ({type(_tg_err).__name__}: {_tg_err}) — "
                           f"Cloudflare dispatches every tick until it is written.")
                 if not _run_now:
