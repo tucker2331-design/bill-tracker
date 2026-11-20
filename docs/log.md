@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-20] pr | #278 merged — going private (secret scan + checklist/security audit) + drafting room/legislator v5 (71f3609)
+GitHub CI green on 0dc2536 (Semgrep, mypy, prepush-audit, structural, golden, web-build); Codex 2 × P2 + Gemini folded
+in (ab96835); VA Worker build green. `bill-tracker-ca` Cloudflare check red from the owner's non-main branch-build
+setting (commented). Repo NOT yet private: owner checks + Actions minutes + VA Health reads first ([[ideas/going_private]]).
+
 ## [2026-11-20] design + rule | Drafting room and legislator page v5; names rule; #278 review fold-in
 - Owner feedback on the desktop mocks folded: wide view + 12-column rows; law field searches all 612 laws in PA bill
   titles; committee path as a left-to-right flow; one-pager facts (copy) instead of a PDF sheet; co-signers and
