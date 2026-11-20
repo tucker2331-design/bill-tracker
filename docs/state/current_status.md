@@ -134,6 +134,9 @@ status: active
   ([[knowledge/pa_bill_history_xml]]). Case law #154.
 
 ## Watch items
+- **🔁 Session rollovers: CA Dec 1–7 (convenes Dec 7), PA Jan 5, NY Jan 6, VA Jan 13.** Checked 2026-11-20: CA now
+  picks the newest session and stops plainly on an empty export; PA and VA find the new session themselves. What to
+  look at on each day: [[knowledge/session_rollover_2026_27]].
 - **⏰ 2027 SESSION OPEN → activate the gated build-wave features.** When the worker detects the 2027 regular
   session (session rollover), the Change-Ledger live feed + Changes tab become validatable and the docket-drop
   histogram becomes measurable. To do at session open: (1) dry-run `tools/change_ledger/` per

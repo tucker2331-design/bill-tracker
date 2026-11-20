@@ -142,6 +142,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[knowledge/openstates_bulk_va]] — **20 VA sessions 2017–2027, CC0, no commercial restriction. The historical-data answer. Needs a free account (owner), then a fidelity check against our LIS 2023/24.**
 - [[knowledge/legacylis_csv_route]] — **the pre-2025 CSV route, FOUND 2026-08-01 (`SiteInformation/ftp.html`, not `csvinfo.html`). Complete 2023 + 2024 sessions, schema byte-identical to the modern blob. Calibration base 2 → 4 sessions. No pre-2025 docket.**
 - [[knowledge/legiscan_terms]] — **STUB + COMPLIANCE GATE: the temporary cross-state corpus source. Terms/scope/rate-limit/attribution must be captured BEFORE the first request (the rule that kept the VA integration clean, applied to a third party). Owner-blocked on the API key; includes the volume question the 50-state design hangs on (do dataset archives embed full text or only doc_id refs?).**
+- [[knowledge/session_rollover_2026_27]] — **watch (2026-11-20):** CA Dec 7, PA Jan 5, NY Jan 6, VA Jan 13: how each job finds the new session, what happens at the edge, what to check on the day.
 - [[knowledge/lis_api_safety]] — **CHARTER: how hard/often we may hit LIS — 5 guardrails + meeting-driven cadence (load tracks activity, never a metronome)**
 - [[knowledge/lis_api_reference]] — VA LIS endpoints, auth, quirks
 - [[knowledge/ny_openleg_api_reference]] — New York OpenLegislation source map and first engine contract
