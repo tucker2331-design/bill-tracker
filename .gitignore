@@ -78,3 +78,11 @@ web/dist-ca
 .openstates_people
 tools/historical_cache/ca/*/tables/
 tools/calibration/ca/.*.pkl
+
+# Local Cloudflare dev state (wrangler/miniflare): account id, local D1 copies. Never committed (going_private.md).
+.wrangler/
+# Secrets that live only in Cloudflare / GitHub / Streamlit — never in the repo.
+.env
+.env.*
+.dev.vars
+.streamlit/secrets.toml

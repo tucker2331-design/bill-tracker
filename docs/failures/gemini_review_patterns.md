@@ -512,3 +512,31 @@ previous session, each with an "unknown" flag. The leak turned out to be tiny (0
 the clean number is the only one that can be quoted. **Rule:** for every input, ask "on what date did this become
 public?", not just "which session is it from?"
 
+
+## 2026-11-19 — PR #278 (going private: secret scan). Codex 2 × P2, Gemini 8 × medium, Semgrep 1.
+
+### A final-tree scan cannot see a secret added and removed inside the same push
+The pre-push secret check scanned only the checked-out files. A push whose first commit adds a token and second
+removes it passes, yet the token is in the pushed history for good (Codex reproduced it). **Rule: a check on
+something that persists in history must scan every commit being introduced, not the end state.** Fixed:
+`secret_scan.py --commits <range>`, and the audit runs it on the PR's / push's range as well as the tree.
+
+### "No findings" from an incomplete input is not "clean"
+`--history` in a shallow clone reported "none in any commit" though the omitted ancestry was never read (Codex).
+Same class as a counter that reads zero when the source was empty. **Fixed:** a shallow repository is reported as
+an incomplete scan and fails.
+
+### A tool crash reported as the thing the tool looks for
+When `secret_scan.py` itself crashed, the audit said "a tracked file holds a live credential" with an empty list
+(Gemini). **Fixed:** the audit says the scanner failed to run, with its stderr, unless real hits were printed.
+Also folded: paths decoded with `os.fsdecode` (a non-UTF-8 filename can't crash the scan), the `git cat-file`
+child closed in `finally`, UTF-8 + `with` for the mockup generator's files.
+
+### "Use a centralized load_json_validated" — declined
+No such loader exists in the repo, and `gen_desktop.py` is a mockup generator off the product path that already
+fails loudly: a malformed JSON raises, a missing key raises, and a district/shape count mismatch raises
+`SystemExit`. Nothing is skipped silently, so there is no hidden error to surface.
+
+### Semgrep house rule: `except …: continue`
+The tree scan skipped a tracked path missing from disk with a bare `continue` in the handler. Fixed: counted and
+printed as a note (Standard #4 / source-miss visibility).

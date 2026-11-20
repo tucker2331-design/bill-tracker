@@ -1,0 +1,311 @@
+<title>Drafting Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/*CHROME_CSS*/
+/* drafting room v5: the idea page on the PA site, wide view, rows read left to right */
+.inputs { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 3fr) minmax(0, 3fr) minmax(0, 2fr); gap: var(--s3) var(--s4); align-items: end; }
+@media (max-width: 1180px) { .inputs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .inputs { grid-template-columns: minmax(0, 1fr); } }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field label { color: var(--ink-faint); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; }
+.field .hint { color: var(--ink-faint); font-size: 12px; }
+input[type=search] { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 0; border-radius: var(--radius-sm); padding: 7px 10px; width: 100%; }
+.picks { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: var(--s3); }
+.pick { border: 1px solid var(--line-strong); background: transparent; border-radius: 999px; padding: 3px 10px; color: var(--ink-soft); font-size: 12.5px; font-weight: 600; }
+.pick.on { background: var(--fill-on); color: var(--ink); border-color: transparent; }
+.mapbox svg { width: 100%; height: auto; display: block; }
+path.d { stroke: var(--canvas); stroke-width: .6; cursor: pointer; }
+path.d:hover { stroke: var(--ink); stroke-width: 1.4; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+.legend i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+.hv { min-height: 21px; margin-top: 6px; }
+.bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; min-width: 70px; }
+.bar > i { display: block; height: 6px; background: var(--ink-soft); }
+.path { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--s5); align-items: start; }
+@media (max-width: 1180px) { .path { grid-template-columns: minmax(0, 1fr); } }
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; align-items: stretch; }
+@media (max-width: 760px) { .steps { grid-template-columns: minmax(0, 1fr); } }
+.toggle { background: none; border: 0; padding: 0; color: var(--accent); font-size: 13px; margin-top: var(--s2); }
+.toggle:hover { text-decoration: underline; }
+.step { background: var(--surface-2); padding: 12px 14px; min-width: 0; position: relative; }
+.step:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.step:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.step + .step { border-left: 1px solid var(--canvas); }
+.step .n { color: var(--ink-faint); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+.step .room { font-weight: 700; margin-top: 2px; }
+.step .pct { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-top: 6px; line-height: 1.1; }
+.step .what { color: var(--ink); font-size: 13px; }
+.step .who { color: var(--ink-faint); font-size: 12px; margin-top: 4px; }
+.step .arrow { position: absolute; right: -9px; top: 50%; transform: translateY(-50%); z-index: 1; color: var(--ink-faint); font-size: 16px; background: var(--surface); border-radius: 50%; width: 18px; height: 18px; line-height: 17px; text-align: center; }
+.ft { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s2); align-items: end; height: 120px; }
+.ft > div { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; gap: 3px; }
+.ft .p { text-align: center; font-size: 12.5px; font-weight: 700; }
+.ft .b { background: var(--ink-soft); border-radius: 4px 4px 0 0; }
+.ftx { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s2); border-top: 1px solid var(--line-strong); padding-top: 4px; }
+.ftx span { text-align: center; font-size: 12px; color: var(--ink-faint); }
+.facts { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13.5px; }
+.facts p { margin: 0; padding: 5px 0; }
+.facts p + p { border-top: 1px solid rgba(255,255,255,.06); }
+.rowact { display: flex; align-items: center; gap: var(--s3); margin-top: var(--s3); flex-wrap: wrap; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); margin-bottom: var(--s3); }
+.kpi { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; }
+.kpi b { font-size: 18px; display: block; }
+.kpi span { color: var(--ink-faint); font-size: 12px; }
+.loading { color: var(--ink-faint); padding: var(--s5) 0; }
+.ph { color: var(--ink-faint); }
+</style>
+
+<!--CHROME:warroom-->
+<main class="main main-wide gut">
+  <nav class="wb-nav"><a class="wb-back" href="#">‹ War Room</a><span class="sc">Drafting room · team only</span></nav>
+  <header class="wb-title">
+    <h1>Care for nursing-home residents</h1>
+    <p>Idea · no bill number yet · House</p>
+  </header>
+
+  <section class="grp" style="margin-top: 18px" aria-label="Inputs">
+    <div class="gh"><div class="titles"><h3 class="h">Inputs</h3><span class="paren">(the four things the team chooses; the page finds the rest)</span></div><span class="gsum" id="fallback"></span></div>
+    <div class="inputs">
+      <div class="field"><label for="lawInput">Law it changes</label>
+        <input type="search" id="lawInput" list="lawList" autocomplete="off"><datalist id="lawList"></datalist>
+        <span class="hint" id="lawHint"></span></div>
+      <div class="field"><label for="partSel">Part of the law</label><select id="partSel"></select><span class="hint">from the "in &lt;article&gt;" phrase in bill titles</span></div>
+      <div class="field"><label for="measureSel">Who it affects</label><select id="measureSel"></select><span class="hint" id="measureHint"></span></div>
+      <div class="field"><label for="majSeg">Sponsor's party</label><div class="seg" id="majSeg" role="group"><button type="button" data-maj="1">Majority</button><button type="button" data-maj="0">Minority</button></div><span class="hint">in the House this session</span></div>
+    </div>
+    <div class="picks" id="picks"></div>
+  </section>
+
+  <div class="g12">
+    <section class="grp s6" id="sec-map" aria-label="Residents affected by district"><div class="loading">Loading Pennsylvania's 203 House districts…</div></section>
+    <section class="grp s6" id="sec-top" aria-label="Top 10 districts"></section>
+    <section class="grp s12" id="sec-path" aria-label="Committee path"></section>
+    <section class="grp s7" id="sec-sp" aria-label="Possible sponsors"></section>
+    <section class="grp s5" id="sec-co" aria-label="Co-sponsors to ask"></section>
+    <section class="grp s4" id="sec-eb" aria-label="Earlier bills on this law"></section>
+    <section class="grp s4" id="sec-me" aria-label="Co-sponsorship memos"></section>
+    <section class="grp s4" id="sec-ft" aria-label="Filing time"></section>
+    <section class="grp s6" id="sec-ds" aria-label="One-pager facts"></section>
+    <section class="grp s6" id="sec-ve" aria-label="Versions"></section>
+  </div>
+  <p class="foot">Mockup of the PA site's wide view. Every number in the body is real: Census ACS 2020–24 and 2024 district
+    maps; CMS and NCES for places; PA bill history exports 2009–26 (bills, co-sponsors, committees); co-sponsorship memos
+    2025–26; the House roster. Placeholders: the header clocks, the tracking count, the signed-in name, election margins
+    (no PA election results loaded yet) and the Versions rows (team-entered).</p>
+</main>
+
+<script>
+/*LINKS*/
+const RAMP = ["#30373A", "#525C61", "#7C878D", "#AAB3B8", "#DCE1E4"];
+const F = (n) => Number(n).toLocaleString("en-US");
+const P = (x) => (x == null ? "—" : (100 * x).toFixed(1) + "%");
+const P0 = (x) => (x == null ? "—" : Math.round(100 * x) + "%");
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const plural = (n, one, many) => F(n) + " " + (Number(n) === 1 ? one : many);
+const PLACES = { nh: "Nursing homes", beds: "Nursing-home beds", hosp: "Hospitals", sch: "Public schools" };
+const SHORT = { seniors: "People 65+", children: "Children", under5: "Under 5", veterans: "Veterans", poverty: "In poverty",
+  child_poverty: "Children in poverty", uninsured: "Uninsured", disability: "Disability", renters: "Renters",
+  rent_burdened: "Rent-burdened", no_vehicle: "No car", limited_english: "Limited English", foreign_born: "Born abroad",
+  snap: "On SNAP", no_internet: "No internet", farm_jobs: "Farm jobs", nh: "Nursing homes", beds: "Beds",
+  hosp: "Hospitals", sch: "Schools" };
+const GROUPS = [["Age", ["seniors", "children", "under5"]], ["Income and benefits", ["poverty", "child_poverty", "snap"]],
+  ["Health", ["uninsured", "disability"]], ["Housing and access", ["renters", "rent_burdened", "no_vehicle", "no_internet"]],
+  ["Language and origin", ["limited_english", "foreign_born"]], ["Work and service", ["farm_jobs", "veterans"]],
+  ["Places (counts, not people)", ["nh", "beds", "hosp", "sch"]]];
+const $ = (id) => document.getElementById(id);
+const st = { law: 0, part: 0, measure: "seniors", maj: true, picked: null, lawNote: "", allSp: false };
+let D, R, BY = {};
+
+function val(r, m) { return PLACES[m] ? [r[m], null] : D.mv[r.d][m]; }
+function q(vals, p) { const s = vals.slice().sort((a, b) => a - b); return s[Math.floor(p * (s.length - 1))]; }
+function head(title, paren, sum) {
+  return '<div class="gh"><div class="titles"><h3 class="h">' + esc(title) + '</h3><span class="paren">(' + esc(paren) + ')</span></div><span class="gsum">' + esc(sum || "") + "</span></div>";
+}
+function hd(d) { return "HD " + Number(d); }
+function since(d) { const y = D.v5.first_session[d]; return y ? (y === "2009" ? "2009 or earlier" : y) : "—"; }
+
+function render() {
+  const m = st.measure, isPlace = !!PLACES[m];
+  const label = isPlace ? PLACES[m] : D.ml[m];
+  const key = (r) => (isPlace ? val(r, m)[0] : val(r, m)[1]);
+  const fmtK = (v) => (isPlace ? F(v) : P(v));
+  const cs = (r) => { const [c, s] = val(r, m); return { count: F(c), share: s == null ? "" : P(s) }; };
+  const law = D.steer[st.law], plist = D.parts[law.law], pt = plist[Math.min(st.part, plist.length - 1)];
+
+  // inputs
+  $("lawInput").value = law.law;
+  $("lawHint").textContent = st.lawNote || "searches all " + F(D.v5.laws.distinct) + " laws named in PA bill titles, " + D.v5.laws.sessions;
+  $("picks").innerHTML = '<span class="muted" style="font-size:12.5px">Laws with data in this mockup:</span>'
+    + D.steer.map((s, i) => '<button type="button" class="pick' + (i === st.law ? " on" : "") + '" data-law="' + i + '">' + esc(s.law) + "</button>").join("");
+  $("partSel").innerHTML = plist.map((p, i) => '<option value="' + i + '">' + esc(p.part) + " · " + plural(p.bills, "bill", "bills") + "</option>").join("");
+  $("partSel").value = String(st.part);
+  $("measureSel").innerHTML = GROUPS.map(([g, ks]) => '<optgroup label="' + esc(g) + '">' + ks.map((k) => '<option value="' + k + '">' + esc(PLACES[k] || D.ml[k]) + "</option>").join("") + "</optgroup>").join("");
+  $("measureSel").value = m;
+  $("measureHint").textContent = "all 20 we hold: 16 Census measures + 4 place counts";
+  document.querySelectorAll("#majSeg button").forEach((b) => b.classList.toggle("on", (b.dataset.maj === "1") === st.maj));
+
+  // residents affected: map + top 10
+  const br = [0.2, 0.4, 0.6, 0.8].map((p) => q(R.map(key), p));
+  const cls = (v) => br.filter((b) => v > b).length;
+  const top = R.slice().sort((a, b) => val(b, m)[0] - val(a, m)[0]).slice(0, 10);
+  const tf = top[0];
+  const paths = R.map((r) => '<path class="d" data-d="' + r.d + '" d="' + D.shapes[0][r.d] + '" fill="' + RAMP[cls(key(r))] + '"></path>').join("");
+  const pick = st.picked ? '<path d="' + D.shapes[0][st.picked] + '" fill="none" stroke="#86B6D3" stroke-width="2.2" pointer-events="none"></path>' : "";
+  const legend = RAMP.map((c, i) => '<span><i style="background:' + c + '"></i>' + (i === 0 ? "≤ " + fmtK(br[0]) : i === 4 ? "> " + fmtK(br[3]) : fmtK(br[i - 1]) + "–" + fmtK(br[i])) + "</span>").join("");
+  $("sec-map").innerHTML = head("Residents affected", "by House district, Census ACS 2020–24", "Most: " + hd(tf.d) + " · " + cs(tf).count)
+    + '<div class="rowact" style="margin:0 0 10px"><span class="muted" style="font-size:12.5px">Shade by</span><div class="seg"><button type="button" class="on">' + esc(SHORT[m] || label) + '</button><button type="button" disabled title="Needs PA election results, not loaded yet">Seat safety (needs election data)</button></div></div>'
+    + '<div class="mapbox"><svg viewBox="0 0 1000 ' + D.shapes[1].h + '" role="img" aria-label="Map of Pennsylvania House districts shaded by ' + esc(label) + '">' + paths + pick + "</svg></div>"
+    + '<div class="legend">' + legend + "</div>"
+    + '<div class="hv" id="hv"><span class="soft">Point at a district. Click to open its one-pager facts.</span></div>'
+    + '<div class="foot">Shaded in fifths of the 203 districts. Seat safety (how close the last elections were) is the second layer; it needs PA election results, which we have not loaded.</div>';
+
+  $("sec-top").innerHTML = head("Top 10 districts", "most residents affected", SHORT[m] || label)
+    + '<div class="tw"><table class="t"><thead><tr><th>#</th><th>Member</th><th>District</th><th class="r">Count</th><th class="r">Share</th><th>First bill in our data</th><th class="r">Last margin</th></tr></thead><tbody>'
+    + top.map((r, i) => '<tr class="tap' + (st.picked === r.d ? " on" : "") + '" data-pick="' + r.d + '"><td class="muted">' + (i + 1) + "</td><td>" + esc(r.name) + ' <span class="muted">' + esc(r.party) + "</span></td><td class=\"soft\">" + hd(r.d) + '</td><td class="r num">' + cs(r).count + '</td><td class="r soft">' + cs(r).share + '</td><td class="soft">' + since(r.d) + '</td><td class="r ph">—</td></tr>').join("")
+    + '</tbody></table></div><div class="foot">Top 10 of 203 House districts. First bill in our data = the first session they sponsored a bill (our data starts in 2009). Last margin needs election results.</div>';
+
+  // committee path: rooms (left) + the four steps (right), read left to right
+  const thin = pt.rooms.reduce((a, x) => Math.max(a, x.n), 0) < 8;
+  const scope = thin ? plist[0] : pt;
+  const scopeWord = thin || st.part === 0 ? "law" : "part of the law";
+  const room = scope.rooms.length ? scope.rooms[0].room : law.rooms[0].room;
+  $("fallback").textContent = thin ? "This part has few bills, so the committee path uses the whole law." : "";
+  const rec = scope.record[st.maj ? "majority" : "minority"];
+  const num = (s) => s.split(" of ").map((x) => Number(x.split(" ")[0]));
+  const sent = num(D.ap.House.reported_bills_sent_to_appropriations), hA = num(D.ap.House.came_back_out),
+    hP = num(D.ap.House.passed_chamber_if_it_came_back), sA = num(D.ap.Senate.came_back_out);
+  const steps = [
+    ["Step 1", room + " committee", rec.k, rec.n, "got out of committee", (st.maj ? "majority" : "minority") + "-party bills on this " + scopeWord],
+    ["Step 2", "House Appropriations", hA[0], hA[1], "came back out", "all House bills sent there (most bills that get out of committee are: " + F(sent[0]) + " of " + F(sent[1]) + ")"],
+    ["Step 3", "House floor vote", hP[0], hP[1], "passed the House", "bills that came back from Appropriations"],
+    ["Step 4", "Senate Appropriations", sA[0], sA[1], "came back out", "all bills the Senate sent there"],
+  ];
+  $("sec-path").innerHTML = head("Committee path", "where bills like this go, and what happened at each step", room + ", then 3 more steps")
+    + '<div class="path"><div><div class="tw"><table class="t"><thead><tr><th>Bills on this ' + scopeWord + ' went to</th><th></th><th class="r">Bills</th></tr></thead><tbody>'
+    + scope.rooms.map((x) => "<tr><td>" + esc(x.room) + '</td><td style="width:35%"><div class="bar"><i style="width:' + Math.round((100 * x.k) / x.n) + '%"></i></div></td><td class="r"><span class="num">' + F(x.k) + '</span> <span class="soft">of ' + F(x.n) + "</span></td></tr>").join("")
+    + '</tbody></table></div><div class="foot">House bills 2019–24 that named this ' + scopeWord + ", by the committee they were sent to first.</div></div>"
+    + '<div><div class="steps">' + steps.map((s, i) => '<div class="step"><div class="n">' + s[0] + '</div><div class="room">' + esc(s[1]) + '</div><div class="pct">' + P0(s[2] / s[3]) + '</div><div class="what">' + F(s[2]) + " of " + F(s[3]) + " " + s[4] + '</div><div class="who">' + esc(s[5]) + "</div>" + (i < 3 ? '<span class="arrow" aria-hidden="true">›</span>' : "") + "</div>").join("") + "</div>"
+    + '<div class="foot">Read left to right. Step 1 counts bills on this ' + scopeWord + "; steps 2–4 count all bills, because few bills on one law get that far. Each step is its own count (House bills 2019–24); we do not multiply them into one chance.</div></div></div>";
+
+  // possible sponsors: members of the room, A–Z
+  const inRoom = (r) => r.seats.some((s) => s.indexOf(room) === 0);
+  const last = (n) => n.split(" ").pop();
+  const carriers = R.filter(inRoom).sort((a, b) => last(a.name).localeCompare(last(b.name)));
+  const memberCell = (r) => {
+    const chair = r.seats.filter((s) => s.indexOf(room) === 0)[0].indexOf("chair") > 0;
+    const nm = LINKS.legislator && r.d === LINKS.legislatorDistrict
+      ? '<a href="' + LINKS.legislator + '" target="_blank" rel="noopener">' + esc(r.name) + "</a>" : esc(r.name);
+    return nm + (chair ? ' <span class="sc">chair</span>' : "");
+  };
+  $("sec-sp").innerHTML = head("Possible sponsors", "members of the " + room + " committee, A–Z", plural(carriers.length, "member", "members"))
+    + '<div class="tw"><table class="t"><thead><tr><th>Member</th><th>District</th><th>Party</th><th class="r">' + esc(SHORT[m] || label) + '</th><th class="r">Share</th><th>First bill in our data</th><th class="r">Bills filed 2025–26</th><th class="r">Last margin</th></tr></thead><tbody>'
+    + (st.allSp ? carriers : carriers.slice(0, 12)).map((r) => '<tr class="tap' + (st.picked === r.d ? " on" : "") + '" data-pick="' + r.d + '"><td>' + memberCell(r) + '</td><td class="soft">' + hd(r.d) + '</td><td><span class="sc">' + esc(r.party) + " · " + (r.majority ? "majority" : "minority") + '</span></td><td class="r num">' + cs(r).count + '</td><td class="r soft">' + cs(r).share + '</td><td class="soft">' + since(r.d) + '</td><td class="r soft">' + F(r.filed) + '</td><td class="r ph">—</td></tr>').join("")
+    + '</tbody></table></div>' + (carriers.length > 12 ? '<button type="button" class="toggle" id="spToggle">' + (st.allSp ? "Show the first 12" : "Show all " + carriers.length) + "</button>" : "")
+    + '<div class="foot">Rule: members of ' + esc(room) + ", the committee this " + scopeWord + " usually goes to. Facts only, not a prediction. "
+    + (LINKS.legislator ? "Lisa Borowski's name opens the example legislator page." : "") + "</div>";
+
+  // co-sponsors to ask: a topic pattern, not a raw count
+  const lr = D.v5.law_record[law.law];
+  $("sec-co").innerHTML = head("Co-sponsors to ask", "members who sign bills on this law far more often than their usual bills", plural(lr.pattern_count, "member", "members"))
+    + '<div class="tw"><table class="t"><thead><tr><th>Member</th><th>District</th><th class="r">Signed on this law</th><th class="r">Their usual rate</th><th class="r">Times usual</th></tr></thead><tbody>'
+    + lr.rows.slice(0, 10).map((r) => "<tr><td>" + esc(r.name) + ' <span class="muted">' + esc(r.party) + '</span></td><td class="soft">' + hd(r.district) + '</td><td class="r"><span class="num">' + r.cosigned + '</span> <span class="soft">of ' + r.of + " (" + P0(r.rate) + ')</span></td><td class="r soft">' + P(r.usual) + '</td><td class="r num">' + r.times + "×</td></tr>").join("")
+    + '</tbody></table></div><div class="foot">Rule: current House members who co-signed 5 or more House bills naming this law since 2009, at 1.5× or more their rate on all House bills in the sessions they served. Showing ' + Math.min(10, lr.pattern_count) + " of " + lr.pattern_count + "; " + lr.members_with_record + " current members signed at least one.</div>";
+
+  // earlier bills on this law: quantified
+  $("sec-eb").innerHTML = head("Earlier bills on this " + scopeWord, "bills whose title names it, since 2009", "")
+    + '<div class="kpis"><div class="kpi"><b>' + F(pt.bills) + '</b><span>bills since 2009</span></div><div class="kpi"><b>' + F(pt.done) + '</b><span>finished their session</span></div><div class="kpi"><b>' + F(pt.out) + '</b><span>of those, got out of committee</span></div><div class="kpi"><b>' + F(pt.laws) + "</b><span>of those, became law</span></div></div>"
+    + '<div class="tw"><table class="t"><thead><tr><th>Session</th><th>Bill</th><th>Sponsor</th><th>How far</th></tr></thead><tbody>'
+    + pt.recent.map((b) => '<tr><td class="soft">' + esc(b.s) + '</td><td class="num">' + esc(b.bill) + "</td><td>" + esc(b.who) + '</td><td><span class="sc">' + esc(b.far) + "</span></td></tr>").join("")
+    + '</tbody></table></div><div class="foot">Matched by the law\'s name in the bill title (both chambers). The 5 newest are listed. Title matching is text matching, which needs your Standard #3 decision before launch.</div>';
+
+  // co-sponsorship memos
+  $("sec-me").innerHTML = head("Co-sponsorship memos", "sent this session on this " + scopeWord + ", before they are bills", plural(pt.memos.length, "memo", "memos"))
+    + (pt.memos.length
+      ? pt.memos.map((x) => '<div class="metarow" style="grid-template-columns:minmax(0,1fr) auto"><span>' + esc(x.title) + ' <span class="muted">· ' + esc(x.who) + '</span></span><span class="sc">' + esc(x.bill) + "</span></div>").join("")
+      : '<div class="soft">No memos this session on this ' + scopeWord + ".</div>")
+    + '<div class="foot">From PA\'s co-sponsorship memo feed. The right column is the bill a memo became, when it has one.</div>';
+
+  // filing time
+  const ft = D.ft.by_filing_time[st.maj ? "majority" : "minority"];
+  const mx = Math.max(...Object.values(ft).map((x) => x.pct));
+  const bars = Object.entries(ft);
+  $("sec-ft").innerHTML = head("Filing time", "share out of committee, by month filed", "Filed in the last 6 months: " + Math.round(ft["18+ mo"].pct) + "% out")
+    + '<div class="ft">' + bars.map(([w, x]) => '<div title="' + F(x.k) + " of " + F(x.n) + '"><span class="p">' + Math.round(x.pct) + '%</span><span class="b" style="height:' + Math.round((100 * x.pct) / mx) + '%"></span></div>').join("") + "</div>"
+    + '<div class="ftx">' + bars.map(([w]) => "<span>" + esc(w) + "</span>").join("") + "</div>"
+    + '<div class="foot">' + (st.maj ? "Majority" : "Minority") + "-party bills, 2009–24, by months after the session opened that the bill was filed. A session is 24 months.</div>";
+
+  // one-pager facts: lines to paste into the team's own one-pager
+  const f = BY[st.picked || tf.d];
+  const [fc, fsh] = val(f, m);
+  let swC = 0, swD = 0; R.forEach((r) => { const [c, s] = val(r, m); swC += c; if (s) swD += c / s; });
+  const sen = (f.overlap || []).map(([d, n]) => { const x = D.senators[d] || {}; return "Sen. " + (x.name || "?") + " (" + (x.party || "?") + "), SD " + Number(d) + ": " + F(n) + " residents shared"; });
+  const lines = [
+    "House District " + Number(f.d) + " (" + f.name + ", " + f.party + "), " + (f.counties || []).join(", ") + ".",
+    (SHORT[m] || label) + ": " + F(fc) + (fsh == null ? "" : " (" + P(fsh) + " of " + (D.mu[m] || "residents") + "; Pennsylvania " + P(swD ? swC / swD : null) + ")") + ".",
+    "Nursing homes: " + f.nh + " (" + F(f.beds) + " beds). Hospitals: " + f.hosp + ". Public schools: " + f.sch + ".",
+    "Local governments: " + F(f.munis) + " municipalities, " + plural(f.sds, "school district", "school districts") + ".",
+    "Senate overlap: " + (sen.join("; ") || "none") + ".",
+  ];
+  window.__facts = lines.join("\n");
+  $("sec-ds").innerHTML = head("One-pager facts", "lines to paste into your own one-pager", hd(f.d) + " · " + f.name)
+    + '<div class="facts">' + lines.map((l) => "<p>" + esc(l) + "</p>").join("") + "</div>"
+    + '<div class="rowact"><button type="button" class="btn" id="copyBtn">Copy these lines</button><span class="mocknote" id="copyNote">Changes with the district you click and the "Who it affects" choice. Nothing is printed or saved as a PDF.</span></div>';
+
+  // versions (team-entered; placeholders)
+  $("sec-ve").innerHTML = head("Versions", "drafts and who each was offered to, team only", "3 drafts")
+    + '<div class="tw"><table class="t"><thead><tr><th>Draft</th><th>Offered to</th><th>Status</th><th>Date</th></tr></thead><tbody>'
+    + '<tr><td class="num">A</td><td>[legislator] <span class="muted">House</span></td><td><span class="sc">[offered]</span></td><td class="ph">[date]</td></tr>'
+    + '<tr><td class="num">B</td><td>[legislator] <span class="muted">House</span></td><td><span class="sc">[agreed]</span></td><td class="ph">[date]</td></tr>'
+    + '<tr><td class="num">B-S</td><td>[legislator] <span class="muted">Senate twin of B</span></td><td><span class="sc">[not offered]</span></td><td class="ph">[date]</td></tr>'
+    + '</tbody></table></div><div class="foot">The team enters these. When a version is filed it opens the War Room bill page.</div>';
+}
+
+function hover(d) {
+  const h = BY[d], el = $("hv");
+  if (!h) { el.innerHTML = '<span class="soft">Point at a district. Click to open its one-pager facts.</span>'; return; }
+  const [c, s] = val(h, st.measure);
+  el.innerHTML = '<span class="num">' + hd(h.d) + " · " + esc(h.name) + " (" + esc(h.party) + ')</span> <span class="soft">' + F(c) + (s == null ? "" : " · " + P(s)) + " · first bill in our data " + since(h.d) + "</span>";
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-law],[data-maj],[data-pick],path.d,#copyBtn,#spToggle");
+  if (!t || !D) return;
+  if (t.id === "spToggle") { st.allSp = !st.allSp; render(); return; }
+  if (t.id === "copyBtn") {
+    const done = () => { $("copyNote").textContent = "Copied."; };
+    try { navigator.clipboard.writeText(window.__facts).then(done, () => { $("copyNote").textContent = "Copy is blocked here; select the lines and copy them."; }); }
+    catch (err) { $("copyNote").textContent = "Copy is blocked here; select the lines and copy them."; }
+    return;
+  }
+  if (t.dataset.law != null) { st.law = Number(t.dataset.law); st.part = 0; st.lawNote = ""; }
+  else if (t.dataset.maj != null) st.maj = t.dataset.maj === "1";
+  else if (t.dataset.pick != null) { if (e.target.closest("a")) return; st.picked = t.dataset.pick; }
+  else if (t.matches("path.d")) st.picked = t.dataset.d;
+  render();
+});
+document.addEventListener("mouseover", (e) => { const t = e.target.closest && e.target.closest("path.d"); if (t && D) hover(t.dataset.d); });
+$("partSel").addEventListener("change", (e) => { st.part = Number(e.target.value); render(); });
+$("measureSel").addEventListener("change", (e) => { st.measure = e.target.value; render(); });
+$("lawInput").addEventListener("change", (e) => {
+  const v = e.target.value.trim(), i = D.steer.findIndex((s) => s.law === v);
+  if (i >= 0) { st.law = i; st.part = 0; st.lawNote = ""; }
+  else {
+    const hit = D.v5.law_list.find((x) => x[0] === v);
+    st.lawNote = hit ? "Mockup: “" + v + "” (" + plural(hit[1], "bill", "bills") + ") is a real law; this mockup only has page data for the 3 example laws."
+      : "No law by that name in PA bill titles. Pick one from the list.";
+  }
+  render();
+});
+
+fetch("drafting_room_data.json").then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((data) => {
+  D = data;
+  R = D.dist.map((a) => ({ d: a[0], name: a[1], party: a[2], seats: a[3], isNew: a[4], filed: a[5], munis: a[6], sds: a[7],
+    counties: a[8], overlap: a[9], people: a[10], nh: a[11], beds: a[12], hosp: a[13], sch: a[14], majority: a[15] }));
+  R.forEach((r) => { BY[r.d] = r; });
+  $("lawList").innerHTML = D.v5.law_list.map((x) => '<option value="' + esc(x[0]) + '">' + plural(x[1], "bill", "bills") + "</option>").join("");
+  render();
+}).catch((err) => {
+  $("sec-map").innerHTML = '<div class="loading">The district data did not load (' + esc(err.message) + "). Reload the page to try again.</div>";
+});
+</script>

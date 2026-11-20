@@ -192,3 +192,22 @@ memo as an early signal (PA), any ranking (Tier 3, gated).
 2. Full draft text inside the product, or a link to the team's own document?
 3. "Who could carry it": stay a fact table sorted by name (Tier 1), or earn a ranked list through the calibration gate?
 4. One state per idea, or an idea that spans states (the same policy drafted for VA and PA)?
+
+## 8. Owner feedback on the desktop mock, and what v5 changed (2026-11-20)
+Mock: https://claude.ai/artifact/YSsrrSEFrFUtuGK4brkFf9 (generator `tools/design_mocks/desktop/`, facts
+`tools/calibration/pa/pa_mock_v5.py`).
+- **Space:** the site's wide view (1560px, as the Calendar uses) and a 12-column grid; panels sit side by side in rows.
+- **"Only 3 laws?"** No. The 3 were picked for the example to show a steering choice. The law field now searches all
+  **612 laws named in PA bill titles 2009–26** (26,971 of 36,652 bills name one; 271 laws have 5+ bills).
+- **Who it affects:** all 20 measures we hold (16 Census + 4 place counts), now grouped. More are cheap to add (same
+  Census pipeline); say which groups matter.
+- **Committee path:** the four boxes are now a left-to-right flow, each step with a percent, "k of n" and who it counts.
+- **District sheet → One-pager facts:** lines to paste into the team's own one-pager, with a copy button; no PDF.
+- **Support → Co-sponsors to ask:** a measured topic pattern: current members who co-sign bills on this law at 1.5× or
+  more their usual rate (5+ bills). A raw count put the members who sign everything on top.
+- **Earlier bills:** quantified (bills since 2009 · finished their session · of those got out · of those became law)
+  and the matching rule named (the law's name in the title: text matching, Standard #3 decision still open).
+- **Elections on the map:** a second shading layer ("seat safety") and a last-margin column, both waiting on PA
+  election results; "first bill in our data" (tenure floor, from 2009) is real now.
+- Names follow the new rule in [[workflow/design_proposal_protocol]] (technical name + plain meaning in brackets).
+

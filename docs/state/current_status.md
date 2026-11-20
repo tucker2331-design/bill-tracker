@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-11-18
+updated: 2026-11-19
 status: active
 ---
 
@@ -34,6 +34,10 @@ status: active
 
 ## NEXT (needs owner infra / a decision — then I execute)
 
+- **🔒 GitHub repo goes private (owner, 2026-11-19, next up) — DON'T FLIP YET.** No live keys anywhere in the code or
+  its 1,894 commits; 0 forks. Two things break on the day: Actions minutes (~9–13k/month vs 2,000 free) and the
+  Virginia Health page's GitHub reads. ~15 min of owner checks (sheets Restricted, Streamlit private, workflow
+  permissions, commit email), then my fixes, then the flip: [[ideas/going_private]].
 - **Per-state admin role** (owner, 2026-11-19, to-do): state leads manage their team's sign-ins and each person's districts; admins see the full Health page — needs F1 (clients) first: [[ideas/state_admin_role]].
 - **Executive site** (owner decided the shape 2026-11-19: two halves, tiered health, exec site for 2+ states; groundwork behind session-critical tracking): [[ideas/executive_site]] §7.
 - **Every state at Virginia's baseline** — PA bill documents done; PA bill-fate stats level with VA (round 3); full Health next; summaries + PA vote predictions are your calls: [[ideas/state_baseline_parity]].
@@ -91,7 +95,7 @@ status: active
 ## READY
 - **📋 OWNER LIST 2026-11-16/18:** ✅ Sheets retry (#271) · ✅ VA on the chamber subway (#272) · ✅ census guards +
   speed switch (#273) · ✅ Cloudflare ticks verified · ✅ PA stats batches 1–2 + element-value + drafting tests
-  ([[testing/pa_replication]], plan [[testing/pa_predictive_plan]]) · ✅ batch 3 (member votes, 2026-11-18) · ✅ party position tested ([[testing/pa_party_position]] — owner decision on memos) · drafting room v4 + legislator page mocked — **awaiting review** · 🇨🇦 California: bills (#274) + calendar + committee members (#275) + stats ([[testing/ca_replication]]) — **owner steps: Worker secrets + Google sign-in origin + turn off non-main branch builds** ([[knowledge/ca_pubinfo]])
+  ([[testing/pa_replication]], plan [[testing/pa_predictive_plan]]) · ✅ batch 3 (member votes, 2026-11-18) · ✅ party position tested ([[testing/pa_party_position]] — owner decision on memos) · drafting room + legislator page **v5 desktop mocks (2026-11-20, owner feedback folded; PA election source is your call)** · 🇨🇦 California: bills (#274) + calendar + committee members (#275) + stats ([[testing/ca_replication]]) — **owner steps: Worker secrets + Google sign-in origin + turn off non-main branch builds** ([[knowledge/ca_pubinfo]])
   ([[ideas/drafting_war_room]], [[knowledge/district_profiles]]) · portfolio mock needs the same redo
   ([[ideas/legislator_portfolio]]).
 - **🕒 Jobs: dropped GitHub ticks (found 2026-11-02, [[log]]):** (1) Sheets 429 — DONE 2026-11-16 (`sheets_retry`,
