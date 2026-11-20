@@ -8,6 +8,27 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-20] going private | Tick gate: Cloudflare starts a GitHub job only when a worker is due (A1)
+- Measured 28.5 h: ~11,000 billed Actions min/month, ~9,000 of it from ticked jobs that skip (VA is at daily speed).
+  Each worker's gate now writes its next full-cycle time to `Tick_Gate` (`cadence.next_due`, same rule, quiet hours,
+  32 h horizon); `worker/ticks.js` offers only due jobs; any doubt (no SA, unreadable, wrong header, missing row,
+  stale > 33 h) offers every job as before. LIS load unchanged. Tests: cadence 76, ticks 23. Expected ~670 min/month
+  for the three jobs (was ~9,000) ([[ideas/going_private]] A1′, [[knowledge/lis_api_safety]]).
+- #279 Codex 3 × P2 folded in: the gate row moves forward only after a successful cycle; new meeting windows
+  refresh the calendar row and reset the bill row; `web/public/_headers` puts the headers on the pages too.
+
+## [2026-11-20] going private | VA Health reads moved off the browser's GitHub call; security headers
+- A2 fixed: the trust-surface guard (Actions token, actions: read) now also writes `LastRunUTC` + `Recent` (last 10 runs)
+  to `Guard_Status`; the Health page reads the job strip and the four outside checks from it through the Worker
+  (`web/src/data/guard_rules.ts`, 16 regression checks; guard tests 44). Columns APPENDED, so an older page still reads.
+- Security headers on every Worker response (`worker/headers.js`, 11 tests): frame-ancestors 'none', X-Frame-Options,
+  nosniff, Referrer-Policy, Permissions-Policy. Left for the flip: Actions minutes (A1) ([[ideas/going_private]]).
+
+## [2026-11-20] pr | #278 merged — going private (secret scan + checklist/security audit) + drafting room/legislator v5 (71f3609)
+GitHub CI green on 0dc2536 (Semgrep, mypy, prepush-audit, structural, golden, web-build); Codex 2 × P2 + Gemini folded
+in (ab96835); VA Worker build green. `bill-tracker-ca` Cloudflare check red from the owner's non-main branch-build
+setting (commented). Repo NOT yet private: owner checks + Actions minutes + VA Health reads first ([[ideas/going_private]]).
+
 ## [2026-11-20] design + rule | Drafting room and legislator page v5; names rule; #278 review fold-in
 - Owner feedback on the desktop mocks folded: wide view + 12-column rows; law field searches all 612 laws in PA bill
   titles; committee path as a left-to-right flow; one-pager facts (copy) instead of a PDF sheet; co-signers and

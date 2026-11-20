@@ -21,6 +21,7 @@
  * product disclosure is the worse of the two -- a leaked whip count is a leaked strategy.
  */
 
+import { withSecurityHeaders } from "./headers.js";
 import { verifyGoogleIdToken } from "./auth.js";
 import { membership, teamGate } from "./team.js";
 import { handleSheet } from "./sheets.js";
@@ -240,20 +241,25 @@ async function handleApi(request, env, url) {
   return json({ error: "not found" }, 404);
 }
 
+async function route(request, env, ctx) {
+  const url = new URL(request.url);
+  if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
+    try {
+      return await handleApi(request, env, url);
+    } catch (err) {
+      // Never leak an internal message to the client, but never swallow it either (Standard #4).
+      console.error("api_error", url.pathname, request.method, err && err.stack ? err.stack : String(err));
+      return json({ error: "internal error" }, 500);
+    }
+  }
+  // EVERYTHING else is the SPA. This is the line that keeps the existing site working.
+  return env.ASSETS.fetch(request);
+}
+
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
-      try {
-        return await handleApi(request, env, url);
-      } catch (err) {
-        // Never leak an internal message to the client, but never swallow it either (Standard #4).
-        console.error("api_error", url.pathname, request.method, err && err.stack ? err.stack : String(err));
-        return json({ error: "internal error" }, 500);
-      }
-    }
-    // EVERYTHING else is the SPA. This is the line that keeps the existing site working.
-    return env.ASSETS.fetch(request);
+    // Every response — API and app pages — leaves with the security headers (worker/headers.js).
+    return withSecurityHeaders(await route(request, env, ctx));
   },
 
   // Cron Trigger (wrangler.toml [triggers]): the Slack digest, and the scheduled ticks for the two Virginia

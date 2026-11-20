@@ -1,8 +1,8 @@
 ---
 tags: [ideas, security, github, privacy, owner-request]
-updated: 2026-11-19
+updated: 2026-11-20
 status: active
-open_loop: Repo going private (owner 2026-11-19) — do NOT flip yet; Actions minutes and the VA Health page break first. Owner checks + engineering fixes in §D.
+open_loop: Repo going private (owner 2026-11-19) — do NOT flip yet. A2 + headers fixed; A1 tick gate built 2026-11-20 (measure a week of minutes after merge, then your budget call). Owner checks in §D.
 ---
 
 # Going private: checklist and security audit (owner, 2026-11-19)
@@ -24,8 +24,9 @@ Claim classes: **[sourced]** = a file, command or page named beside it; **[deriv
 ## A. What breaks when the repo goes private
 | # | what | what happens | fix | who |
 |---|---|---|---|---|
-| A1 | **GitHub Actions minutes** | Public repos run free. A private repo on the Free plan gets **2,000 minutes a month** [sourced: docs.github.com Actions billing]. We use about **9,000–13,000 a month with the legislature out of session** [derived: last 100 runs = 6.0 h and 109 billed minutes (each run billed at least 1) → 13,045 per 30 days; the 15-minute ticks alone start 3 runs each → 8,640]. In session, more. Past 2,000 the jobs stop unless billing is on; extra Linux minutes cost $0.006 [sourced: GitHub runner pricing], about **$40–66 a month** off-session [derived]. | (1) Cut idle runs: let the Cloudflare tick check whether there is work before it starts a job (most off-session ticks start a job that exits at once), and run the accuracy sentinel only after a worker actually wrote. (2) Measure a week. (3) Pay for what is left (set an Actions budget). | me, then your call on the budget |
-| A2 | **Virginia Health page** | `web/src/data/verification.ts` and `guards.ts` read GitHub's public API from the browser with no token. Private → every guard and run history shows "unknown" (red). It fails safe, but the page goes red. | The trust-surface guard already reads GitHub with the Actions token every 6 h and writes `Guard_Status` to the sheet. Have it also write the run history and the four guard verdicts there; the page reads them through the Worker like everything else. No new key, so nothing new expires. (Runner-up: a Worker route with a read-only token: live, but one more token to renew yearly.) | me |
+| A1 | **GitHub Actions minutes** (tick gate built 2026-11-20; measure after merge) | Public repos run free. A private repo on the Free plan gets **2,000 minutes a month** [sourced: docs.github.com Actions billing]. We use about **9,000–13,000 a month with the legislature out of session** [derived: last 100 runs = 6.0 h and 109 billed minutes (each run billed at least 1) → 13,045 per 30 days; the 15-minute ticks alone start 3 runs each → 8,640]. In session, more. Past 2,000 the jobs stop unless billing is on; extra Linux minutes cost $0.006 [sourced: GitHub runner pricing], about **$40–66 a month** off-session [derived]. | (1) Cut idle runs: let the Cloudflare tick check whether there is work before it starts a job (most off-session ticks start a job that exits at once), and run the accuracy sentinel only after a worker actually wrote. (2) Measure a week. (3) Pay for what is left (set an Actions budget). | me, then your call on the budget |
+| A1′ | **Expected after the tick gate** (VA at daily, off-session) | [derived] calendar ~1 full cycle (~8 min) + ~3.4 GitHub-cron skips a day; bill ~1 (~3 min) + ~3.4; sentinel ~4.4 → **~670 min/month** for the three (was ~9,000). Other scheduled jobs ~610 (CA 278, PA 76, NY 76, retention 102, guard 51, sentinel cron 25). CI on PRs varies: ~1,190 on the busy day measured. Total **~1,300 with no PRs, ~2,500 on a busy PR month**. In session at a faster speed, real cycles add up: budget for paid minutes then. | measure the first week after merge |
+| A2 | **Virginia Health page** ✅ fixed 2026-11-20 | `web/src/data/verification.ts` and `guards.ts` read GitHub's public API from the browser with no token. Private → every guard and run history shows "unknown" (red). It fails safe, but the page goes red. | The trust-surface guard already reads GitHub with the Actions token every 6 h and writes `Guard_Status` to the sheet. Have it also write the run history and the four guard verdicts there; the page reads them through the Worker like everything else. No new key, so nothing new expires. (Runner-up: a Worker route with a read-only token: live, but one more token to renew yearly.) | me |
 | A3 | **Streamlit (X-Ray)** | Community Cloud allows **one private app per workspace**, and an app deployed from a private repo counts as that one [sourced: docs.streamlit.io "Share your app"]. | Re-authorize Streamlit's GitHub access for private repos. If more than one app deploys from this repo, only one survives. | owner check |
 | A4 | **Cloudflare builds** (VA, PA, CA) | The Cloudflare GitHub app must have access to the now-private repo. | After the flip, merge a tiny change and watch all three builds run. | owner check |
 | A5 | **Cloudflare ticks token** | `GH_DISPATCH_TOKEN` is fine-grained, this repo only, Actions read & write [sourced: [[knowledge/lis_api_safety]]], so it keeps working. | Note its expiry date; fine-grained tokens expire. | owner |
@@ -60,7 +61,7 @@ security flaws in 45% of AI-written code samples.
 | **our version of "open database": the Google Sheets** | **[owner check]** | The sheet IDs are in the public repo. Until each sheet is *Restricted*, anyone with an ID can read every tab, and the "whole app goes private" step 4 is still open on the to-do. VA, PA, CA, NY: Share → General access → Restricted (the service account stays an editor). |
 | internal dashboard public | **[owner check]** | Streamlit X-Ray: app settings → Sharing → private. The legacy page `pages/v2_shadow_test.py` has a "Force Manual Sync" button that starts a GitHub workflow with a token from Streamlit's secrets: if the app is public, anyone can press it. Recommend deleting that paused page. |
 | source maps / debug in production | OK | CA: `.js.map` is not served; API errors answer "internal error", details stay in server logs |
-| security headers | missing (low) | CA sends no Content-Security-Policy, frame-ancestors or Referrer-Policy. Fix: one headers rule in the Worker. |
+| security headers | ✅ fixed 2026-11-20 | Every Worker response now carries frame-ancestors 'none', X-Frame-Options, nosniff, Referrer-Policy and Permissions-Policy (`worker/headers.js`, tested). A full script-src policy is a separate change: it must allow Google sign-in and be tried in a real browser. |
 | rate limits | low risk | every data route needs a team sign-in; `/api/health` is static configuration |
 | vulnerable packages | OK in production | `npm audit`: 0 in what ships; 17 in build-only dev tools (moderate/high denial-of-service) → `npm audit fix` later |
 | leaky CI | OK | no `pull_request_target`; no PR text pasted into shell steps; only GitHub's own actions; fork PRs get no secrets |
@@ -72,8 +73,9 @@ Limits: my sandbox can't reach the VA and PA sites or Google Sheets, so the live
 ## D. The order
 1. **Owner, about 15 minutes:** every sheet Restricted (VA, PA, CA, NY); Streamlit app private + how many apps deploy
    from this repo; Actions workflow permissions → Read; commit email private.
-2. **Me:** A2 Health reads via the sheet; A1 idle-run cut, then a week of minute counts; security headers; delete the
-   legacy force-sync page (with your OK); the contact swap (after you pick the address).
+2. **Me:** ~~A2 Health reads via the sheet~~ (done 2026-11-20: the guard publishes LastRunUTC + Recent, the page reads
+   Guard_Status); ~~security headers~~ (done); ~~A1 idle-run cut~~ (built 2026-11-20: the Tick_Gate tab, [[knowledge/lis_api_safety]]), then a week of minute counts; delete the legacy
+   force-sync page (with your OK); the contact swap (after you pick the address).
 3. **Your calls:** the Actions budget for what's left after the cut; the review bot (A6).
 4. **Flip:** GitHub → Settings → General → Danger Zone → Change visibility → Private.
 5. **After:** merge a tiny PR; check the three Cloudflare builds, one worker run, the Health page, Streamlit.

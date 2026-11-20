@@ -1,0 +1,9 @@
+# Security headers for every file the Cloudflare asset server serves (the pages themselves). Requests for an existing
+# asset never reach the Worker (asset-first routing), so worker/headers.js alone would cover only /api (Codex #279).
+# Keep IDENTICAL to SECURITY_HEADERS in worker/headers.js: worker/test_headers.mjs fails if the two differ.
+/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

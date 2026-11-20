@@ -82,6 +82,8 @@ jobs:
           node web/src/data/__tests__/action_where.regression.mjs
           node web/tools/ts2mjs.mjs web/src/data/agenda.ts /tmp/agenda.mjs
           node web/src/data/__tests__/agenda.regression.mjs
+          node web/tools/ts2mjs.mjs web/src/data/guard_rules.ts /tmp/guard_rules.mjs
+          node web/src/data/__tests__/guard_rules.regression.mjs
           node web/tools/ts2mjs.mjs web/src/data/health_rules.ts /tmp/health_rules.mjs
           node web/src/views/__tests__/health_rules.regression.mjs
           node web/tools/ts2mjs.mjs web/src/state/routes.ts /tmp/routes.mjs
@@ -94,7 +96,7 @@ jobs:
           node web/src/states/__tests__/ca.regression.mjs
       # The Worker's auth + team gate had tests but no runner. Stdlib node only, no network.
       - name: Worker tests (auth, team gate)
-        run: node worker/test_auth.mjs && node worker/test_team.mjs && node worker/test_sheets.mjs && node worker/test_contacts.mjs && node worker/test_alerts.mjs && node worker/test_ticks.mjs
+        run: node worker/test_auth.mjs && node worker/test_team.mjs && node worker/test_sheets.mjs && node worker/test_contacts.mjs && node worker/test_alerts.mjs && node worker/test_ticks.mjs && node worker/test_headers.mjs
 
   structural-tests:
     runs-on: ubuntu-latest
