@@ -123,4 +123,16 @@ ok(T.judge_runs([], six, NOW, born=NOW - timedelta(hours=1))["state"] == "not_ye
 ok("not_yet_due" in T.STATES_OK, "not_yet_due opens no incident")
 ok(T.judge_runs([], six, NOW, born=NOW - timedelta(days=3))["state"] == "never_run", "old workflow that never ran is still never_run")
 ok(T.judge_runs([], six, NOW)["state"] == "never_run", "unknown birth -> no allowance (fail-closed)")
+# 2026-11-20 (going private, A2): the Health page reads the run strip and the last run from Guard_Status, not from
+# GitHub in the browser. Newest first; only completed runs; any trigger; cancelled/skipped are "n", never a pass.
+strip = [run(0.2, None, status="in_progress"), run(1, "success"), run(2, "failure"), run(3, "cancelled"),
+         run(4, "timed_out"), run(5, "skipped"), run(6, "success")]
+ok(T.recent_marks(strip) == "pfnfnp", f"run strip: {T.recent_marks(strip)}")
+ok(T.recent_marks([run(h, "success") for h in range(1, 15)]) == "p" * 10, "strip capped at 10")
+ok(T.recent_marks([]) == "", "no runs -> empty strip")
+ok(T.last_run(strip) == NOW - timedelta(hours=1), "last run = newest completed run that ran")
+ok(T.last_run([run(1, "cancelled"), run(2, "skipped")]) is None, "cancelled/skipped runs are not a last run")
+ok(T.STATUS_HEADER[:10] == ["CheckedUTC", "Check", "Label", "State", "SinceUTC", "LastSuccessUTC", "FailuresInARow",
+                            "ExpectedEvery", "Detail", "URL"], "the first 10 columns never move (older pages read a prefix)")
+ok(T.STATUS_HEADER[10:] == ["LastRunUTC", "Recent"], "new columns are appended")
 print(f"ALL {_checks} trust-surface guard tests passed")

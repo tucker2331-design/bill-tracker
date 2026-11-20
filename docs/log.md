@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-20] going private | VA Health reads moved off the browser's GitHub call; security headers
+- A2 fixed: the trust-surface guard (Actions token, actions: read) now also writes `LastRunUTC` + `Recent` (last 10 runs)
+  to `Guard_Status`; the Health page reads the job strip and the four outside checks from it through the Worker
+  (`web/src/data/guard_rules.ts`, 16 regression checks; guard tests 44). Columns APPENDED, so an older page still reads.
+- Security headers on every Worker response (`worker/headers.js`, 11 tests): frame-ancestors 'none', X-Frame-Options,
+  nosniff, Referrer-Policy, Permissions-Policy. Left for the flip: Actions minutes (A1) ([[ideas/going_private]]).
+
 ## [2026-11-20] pr | #278 merged — going private (secret scan + checklist/security audit) + drafting room/legislator v5 (71f3609)
 GitHub CI green on 0dc2536 (Semgrep, mypy, prepush-audit, structural, golden, web-build); Codex 2 × P2 + Gemini folded
 in (ab96835); VA Worker build green. `bill-tracker-ca` Cloudflare check red from the owner's non-main branch-build

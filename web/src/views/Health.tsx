@@ -13,10 +13,10 @@ import { loadCalendarFreshness } from "../data/calendar";
 import { useEffect, useMemo, useState } from "react";
 import type { Completeness } from "../data/types";
 import { loadHealth, type HealthData, type HealthAlert } from "../data/health";
-import { loadVerification, type GuardRun } from "../data/verification";
+import { guardsFromStatus, type GuardRun } from "../data/verification";
 import { loadHistory, type HistoryData, type AlertSource } from "../data/history";
 import { loadCounter, type CounterState } from "../data/incidents";
-import { loadGuardStatus, loadRuns, GUARD_OK, type GuardLoad, type RunMark } from "../data/guards";
+import { loadGuardStatus, GUARD_OK, type GuardLoad } from "../data/guards";
 import {
   isClean, rings, dialPos, rhythmLimitHours, scheduleLimitHours, verdictOf, type Instrument, type Impeach, type RingExtra, type Category,
 } from "../data/health_rules";
@@ -123,7 +123,6 @@ export function Health({ completeness, dataAsOf, unrecognisedOutcomes }: {
   const [hist, setHist] = useState<HistoryData | null>(null);
   const [counter, setCounter] = useState<CounterState | null>(null);
   const [gs, setGs] = useState<GuardLoad | null>(null);
-  const [runs, setRuns] = useState<Record<string, RunMark[] | null>>({});
   const [calAsOf, setCalAsOf] = useState<Date | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
@@ -134,18 +133,13 @@ export function Health({ completeness, dataAsOf, unrecognisedOutcomes }: {
       return () => { alive = false; };
     }
     loadHealth().then((d) => alive && setH(d)).catch((e) => alive && setHErr(String(e?.message || e)));
-    loadVerification().then((d) => alive && setGuards(d)).catch(() => alive && setGuards([]));
     loadHistory().then((d) => alive && setHist(d)).catch(() => alive && setHist(null));
     loadCounter().then((c) => alive && setCounter(c)).catch(() => alive && setCounter(null));
+    // One read: the job list, each job's last 10 runs and the four outside checks all come from Guard_Status.
     loadGuardStatus().then((g) => {
       if (!alive) return;
       setGs(g);
-      if (g.status !== "ok") return;
-      for (const r of g.rows) {
-        if (!r.check.startsWith("workflow:")) continue;
-        const file = r.check.slice("workflow:".length);
-        loadRuns(file).then((m) => { if (alive) setRuns((x) => ({ ...x, [file]: m })); });
-      }
+      setGuards(guardsFromStatus(g));
     });
     return () => { alive = false; };
   }, [intake]);
@@ -314,8 +308,7 @@ export function Health({ completeness, dataAsOf, unrecognisedOutcomes }: {
         <span className="n">{guardRows.filter((r) => r.check.startsWith("workflow:")).length} jobs + {guardRows.filter((r) => !r.check.startsWith("workflow:")).length} check · {guardRows.filter((r) => !GUARD_OK.has(r.state)).length} not ok</span></div>
       <div className="hx-tile hx-beats">
         {gs?.status !== "ok" ? <p className="red" style={{ margin: 0 }}>Job list unreadable.</p> : guardRows.map((r) => {
-          const file = r.check.startsWith("workflow:") ? r.check.slice(9) : "";
-          const marks = file ? runs[file] : undefined;
+          const marks = r.check.startsWith("workflow:") ? r.recent : undefined;
           const bad = !GUARD_OK.has(r.state);
           return (
             <div className="hx-beat" key={r.check}>

@@ -41,7 +41,13 @@ REPO = os.environ.get("GITHUB_REPOSITORY", "tucker2331-design/bill-tracker")
 SHEET = os.environ.get("INCIDENT_LOG_SPREADSHEET_ID", "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM")
 STATUS_TAB = "Guard_Status"
 STATUS_HEADER = ["CheckedUTC", "Check", "Label", "State", "SinceUTC", "LastSuccessUTC", "FailuresInARow",
-                 "ExpectedEvery", "Detail", "URL"]
+                 "ExpectedEvery", "Detail", "URL",
+                 # Appended 2026-11-20 (the repo is going private: docs/ideas/going_private.md A2). The Health page
+                 # used to read these straight from the public GitHub API in the browser; a private repo needs a
+                 # token there. This job already holds one (actions: read), so it publishes them instead.
+                 # APPENDED, never inserted: the page checks the header as a prefix, so an older page still reads.
+                 "LastRunUTC", "Recent"]
+RECENT_N = 10       # the Health page's run strip shows the last 10 completed runs
 DETECTOR = "trust_surface"
 STATES_OK = {"ok", "disabled", "running", "not_yet_due"}
 # disabled = switched off on purpose; running = first run in progress; not_yet_due = a NEW workflow whose first
@@ -174,6 +180,21 @@ def production_runs(runs, fn):
     return [r for r in runs if r.get("event") == "schedule" or fn in DISPATCH_IS_PRODUCTION]
 
 
+def recent_marks(runs, n=RECENT_N):
+    """The last `n` COMPLETED runs, any trigger, newest first, as one cell: p = success, f = failure / timed out /
+    startup failure, n = anything else (cancelled, skipped, neutral). Any trigger, because the Health strip shows the
+    job's real activity (the Cloudflare ticks dispatch the workers). Pure; unit-tested."""
+    done = [r for r in runs if r.get("status") == "completed"][:n]
+    mark = lambda c: "p" if c == "success" else "f" if c in ("failure", "timed_out", "startup_failure") else "n"  # noqa: E731
+    return "".join(mark(r.get("conclusion")) for r in done)
+
+
+def last_run(runs):
+    """When the newest completed run that actually ran (not cancelled/skipped) started; None if there is none. Pure."""
+    real = [r for r in runs if r.get("status") == "completed" and r.get("conclusion") not in NOT_EVIDENCE]
+    return _parse_ts(real[0].get("created_at")) if real else None
+
+
 def judge_runs(runs, period, now, born=None):
     """Pure verdict over newest-first completed/in-progress runs. Returns dict (no I/O; unit-tested).
     `born` = when GitHub first saw the workflow file (None if unknown -> no allowance, fail-closed)."""
@@ -249,24 +270,27 @@ def check_workflows(now):
             # own `disabled_inactivity` (60 days without a push) also lands here -- shown, so it cannot hide.
             rows.append({"check": f"workflow:{fn}", "label": re.sub(r'^[^A-Za-z0-9]+', '', name).strip() or fn,
                          "state": "disabled", "since": None, "last_success": None, "fails": 0, "every": "off",
-                         "detail": f"switched off on GitHub ({st})", "url": ""})
+                         "detail": f"switched off on GitHub ({st})", "url": "", "last_run": None, "recent": ""})
             continue
         if cron is None:
             rows.append({"check": f"workflow:{fn}", "label": fn, "state": "unknown", "since": None,
-                         "last_success": None, "fails": 0, "every": "?", "detail": why, "url": ""})
+                         "last_success": None, "fails": 0, "every": "?", "detail": why, "url": "",
+                         "last_run": None, "recent": ""})
             continue
         period, every = cron_period(cron)
         label = f"{re.sub(r'^[^A-Za-z0-9]+', '', name).strip()} — {PROVES.get(fn, name)}"
         if period is None:
             rows.append({"check": f"workflow:{fn}", "label": label, "state": "unknown", "since": None,
-                         "last_success": None, "fails": 0, "every": every, "detail": every, "url": ""})
+                         "last_success": None, "fails": 0, "every": every, "detail": every, "url": "",
+                         "last_run": None, "recent": ""})
             continue
         try:
             runs = _gh(f"/actions/workflows/{fn}/runs?per_page=30").get("workflow_runs", [])
             v = judge_runs(production_runs(runs, fn), period, now, born=born)
+            v.update(last_run=last_run(runs), recent=recent_marks(runs))
         except RuntimeError as e:
             v = {"state": "unknown", "since": None, "last_success": None, "fails": 0,
-                 "detail": f"could not read run history: {e}"[:300], "url": ""}
+                 "detail": f"could not read run history: {e}"[:300], "url": "", "last_run": None, "recent": ""}
         rows.append({"check": f"workflow:{fn}", "label": label, "every": every, **v})
     return rows
 
@@ -313,7 +337,7 @@ def check_bill_payload(now):
     url = (f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?tqx=out:csv&sheet=Bill_Tracker"
            f"&range=A1:AF1&headers=0")
     base = {"check": "bill_backend_checks", "label": "Bill backend check results reach the live sheet",
-            "every": "each bill cycle", "last_success": None, "fails": 0, "url": ""}
+            "every": "each bill cycle", "last_success": None, "fails": 0, "url": "", "last_run": None, "recent": ""}
     req = urllib.request.Request(url)
     try:
         tok = _sheet_token()
@@ -368,7 +392,8 @@ def write_status(rows, now):
         print(f"🆕 [trust_surface] created the {STATUS_TAB} tab")
     rows = _carry_since(rows, prior)
     values = [STATUS_HEADER] + [[_iso(now), r["check"], r["label"], r["state"], _iso(r["since"]),
-                                 _iso(r["last_success"]), r["fails"], r["every"], r["detail"], r["url"]]
+                                 _iso(r["last_success"]), r["fails"], r["every"], r["detail"], r["url"],
+                                 _iso(r.get("last_run")), r.get("recent", "")]
                                 for r in rows]
     ws.clear()
     ws.update(values=values, range_name="A1", value_input_option="RAW")
