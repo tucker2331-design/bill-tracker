@@ -193,5 +193,27 @@ check("every record's where-codes line up with its history (one per row), from H
 
 # Committee rosters (need PyYAML) are tested in test_ca_roster.py and test_ca_bill_tracker.py (golden CI job).
 
+# --- session rollover (2026-11-20): newest session wins; an export with no regular-session bill is said plainly ----
+check("one session in the file -> that session", ca_adapter.current_session([{"SESSION_YEAR": "20252026"}] * 3) ==
+      ("20252026", ["20252026"]))
+check("two sessions (rollover) -> the newer one, both reported",
+      ca_adapter.current_session([{"SESSION_YEAR": "20252026"}] * 5000 + [{"SESSION_YEAR": "20272028"}] * 3) ==
+      ("20272028", ["20252026", "20272028"]))
+check("no bills -> no session", ca_adapter.current_session([]) == ("", []))
+
+
+class _EmptyExport:
+    def rows(self, _table):
+        return []
+
+
+try:
+    ca_adapter.build_records(_EmptyExport(), datetime.date(2026, 12, 2), "2026-12-02T12:00:00Z")
+    _raised = ""
+except ValueError as e:
+    _raised = str(e)
+check("an empty export stops with a plain 'between sessions' reason (nothing written)",
+      "no regular-session bills" in _raised and "last published data stands" in _raised, _raised)
+
 print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")
 sys.exit(1 if FAILS else 0)

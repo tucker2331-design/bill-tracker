@@ -85,6 +85,15 @@ def committee_names(ex: Export) -> Dict[str, str]:
     return out
 
 
+def current_session(bill_rows) -> Tuple[str, List[str]]:
+    """The session the export is about: the NEWEST `SESSION_YEAR` on any bill, plus every year seen (sorted).
+    Every export measured so far holds one session (2019, 2021, 2023, 2025 files; checked 2026-11-20), where newest
+    and most-common agree. If a file ever carried two (e.g. at the December rollover), the newer session is the live
+    one; the old session is over. Pure."""
+    years = sorted({str(b.get("SESSION_YEAR", "")) for b in bill_rows if b.get("SESSION_YEAR")})
+    return (years[-1] if years else ""), years
+
+
 def build_records(ex: Export, today: datetime.date, now_utc: str,
                   as_of_utc: Optional[str] = None, extras: Optional[dict] = None) -> Tuple[List[dict], dict]:
     """`now_utc` = when we checked; `as_of_utc` = when the source published the export (the job always passes it;
@@ -96,8 +105,15 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
     bill_name: Dict[str, str] = {}
     names = committee_names(ex)
     bills = {r["BILL_ID"]: r for r in ex.rows("BILL_TBL")}
-    session = collections.Counter(b["SESSION_YEAR"] for b in bills.values()).most_common(1)[0][0] if bills else ""
+    session, years_seen = current_session(bills.values())
     bills = {k: v for k, v in bills.items() if v["SESSION_YEAR"] == session and v["SESSION_NUM"] == "0"}
+    if not bills:
+        # Between sessions (2026-11-20 rollover check): the 2025-26 session ends Nov 30 and the 2027-28 session's
+        # bills appear only after it convenes (Dec 7, 2026). An export with no regular-session bill is that gap, or
+        # an upstream fault; either way nothing is written and the sheet keeps the last published session. Said
+        # plainly here instead of failing later on an empty session code in the calendar.
+        raise ValueError(f"CA export holds no regular-session bills (session years seen: {years_seen or 'none'}) — "
+                         f"between sessions or an upstream fault; nothing written, the last published data stands")
     # Measures neither house originates (e.g. GRP, a Governor's Reorganization Plan) are COUNTED, not built: the
     # contract places every bill in a chamber.
     outside = collections.Counter(v["MEASURE_TYPE"] for v in bills.values() if v["MEASURE_TYPE"] not in TYPE_NAME)
