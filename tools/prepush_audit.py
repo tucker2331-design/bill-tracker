@@ -241,22 +241,29 @@ def check_open_loops(fails):
                      f"      {detail or r.stdout.strip() or r.stderr.strip()}")
 
 
-def check_secrets(fails):
-    """Point 18 — no live credential in any tracked file (tools/secret_scan.py). Repo-wide on every push: the repo
-    is going private (docs/ideas/going_private.md) and GitHub's free secret scanning covers only public repos."""
+def check_secrets(fails, rev_range=None):
+    """Point 18 — no live credential in any tracked file, NOR in any commit this push introduces
+    (tools/secret_scan.py). Repo-wide on every push: the repo is going private (docs/ideas/going_private.md) and
+    GitHub's free secret scanning covers only public repos. A token added and removed inside one push stays in
+    history, so the commits in the range are scanned too (Codex #278)."""
     tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "secret_scan.py")
     if not os.path.isfile(tool):
         fails.append("tools/secret_scan.py is missing — committed credentials are unchecked.")
         return
+    cmd = [sys.executable, tool] + (["--commits", rev_range] if rev_range else [])
     try:
-        r = subprocess.run([sys.executable, tool], capture_output=True, text=True, timeout=120)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
         fails.append("secret_scan: tools/secret_scan.py did not finish within 120s.")
         return
     if r.returncode != 0:
-        fails.append("secret_scan: a tracked file holds what looks like a live credential. Rotate it, then remove it.\n"
-                     "      " + "\n      ".join(line for line in r.stdout.splitlines() if line.strip().startswith("✗")))
-
+        hits = [line for line in r.stdout.splitlines() if line.strip().startswith("✗")]
+        if hits:
+            fails.append("secret_scan: what looks like a live credential is committed. Rotate it, then remove it.\n"
+                         "      " + "\n      ".join(hits))
+        else:   # the scanner itself failed (bad range, git error, crash): say so, never claim a credential (Gemini #278)
+            fails.append(f"secret_scan: tools/secret_scan.py failed to run (exit {r.returncode}).\n"
+                         f"      {(r.stderr or r.stdout).strip()[-600:]}")
 
 def check_caselaw_index(fails):
     """Point B-2 — an audit entry must actually reach the generated `## Index`.
@@ -354,7 +361,8 @@ def main():
     # failure modes they exist for (a page that stopped being linked, an entry that never reached the
     # Index) are states of the repo, not lines in a diff — they are exactly the things a diff cannot see.
     check_open_loops(fails)
-    check_secrets(fails)
+    # The commits this audit covers: the same range the diff uses (none for --cached, which is not yet a commit).
+    check_secrets(fails, ns.range or (None if ns.cached else f"{ns.base}..HEAD"))
     check_caselaw_index(fails)
     check_claude_md_cadence(fails)
     warn_lines = warns(files)

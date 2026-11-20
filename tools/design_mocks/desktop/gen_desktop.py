@@ -17,7 +17,17 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
 LINKS = {"drafting": sys.argv[2] if len(sys.argv) > 2 else "", "legislator": sys.argv[3] if len(sys.argv) > 3 else ""}
 
-GOLDEN = json.load(open(os.path.join(ROOT, "goldens", "pa_bill_records_2025_0.json")))["completeness"]
+def _json(path: str):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _text(path: str) -> str:
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+GOLDEN = _json(os.path.join(ROOT, "goldens", "pa_bill_records_2025_0.json"))["completeness"]
 TABS = [("today", "Today"), ("calendar", "Calendar"), ("search", "Search"), ("warroom", "War Room"), ("health", "Health")]
 
 
@@ -46,8 +56,8 @@ def chrome(active: str) -> str:
 
 
 def fill(name: str, extra: dict) -> str:
-    page = open(os.path.join(HERE, name)).read()
-    css = open(os.path.join(HERE, "chrome.css")).read()
+    page = _text(os.path.join(HERE, name))
+    css = _text(os.path.join(HERE, "chrome.css"))
     for marker, value in {"/*CHROME_CSS*/": css, "<!--CHROME:warroom-->": chrome("warroom"), **extra}.items():
         if marker not in page:
             raise SystemExit(f"{name}: marker {marker} missing")
@@ -56,8 +66,8 @@ def fill(name: str, extra: dict) -> str:
 
 
 def drafting_data() -> dict:
-    E = json.load(open(os.path.join(ROOT, "tools/calibration/pa/example_drafting.json")))
-    prof = json.load(open(os.path.join(ROOT, "tools/historical_cache/census/district_profiles.json")))
+    E = _json(os.path.join(ROOT, "tools/calibration/pa/example_drafting.json"))
+    prof = _json(os.path.join(ROOT, "tools/historical_cache/census/district_profiles.json"))
     P = prof["states"]["PA"]["chambers"]["lower"]["districts"]
     dist = []
     for r in E["districts"]:
@@ -73,8 +83,8 @@ def drafting_data() -> dict:
 
 
 def legislator_data() -> dict:
-    L = json.load(open(os.path.join(ROOT, "tools/calibration/pa/legislator_example.json")))
-    prof = json.load(open(os.path.join(ROOT, "tools/historical_cache/census/district_profiles.json")))
+    L = _json(os.path.join(ROOT, "tools/calibration/pa/legislator_example.json"))
+    prof = _json(os.path.join(ROOT, "tools/historical_cache/census/district_profiles.json"))
     ch = "lower" if L["body"] == "H" else "upper"
     L["names"] = {d: (v["member"] or {}).get("name", "") for d, v in prof["states"]["PA"]["chambers"][ch]["districts"].items()
                   if d in {n["d"] for n in L["map"]["inset"]["neighbors"]}}
@@ -85,11 +95,11 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     leg = legislator_data()
     links = "const LINKS = " + json.dumps({**LINKS, "legislatorDistrict": leg["district"]}) + ";"
-    with open(os.path.join(OUT, "drafting_room_data.json"), "w") as f:
+    with open(os.path.join(OUT, "drafting_room_data.json"), "w", encoding="utf-8") as f:
         json.dump(drafting_data(), f, separators=(",", ":"))
-    with open(os.path.join(OUT, "drafting_room.html"), "w") as f:
+    with open(os.path.join(OUT, "drafting_room.html"), "w", encoding="utf-8") as f:
         f.write(fill("drafting_room.html", {"/*LINKS*/": links}))
-    with open(os.path.join(OUT, "legislator.html"), "w") as f:
+    with open(os.path.join(OUT, "legislator.html"), "w", encoding="utf-8") as f:
         f.write(fill("legislator.html", {"/*LINKS*/": links, "/*DATA*/": "const DATA = " + json.dumps(leg, separators=(",", ":")) + ";"}))
     for n in ("drafting_room.html", "drafting_room_data.json", "legislator.html"):
         print(n, os.path.getsize(os.path.join(OUT, n)))

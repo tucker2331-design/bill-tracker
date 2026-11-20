@@ -18,10 +18,12 @@ OUTPUT never prints a value: path:line, the kind, and a masked fingerprint (firs
 Usage:
   python3 tools/secret_scan.py            # every tracked file in the working tree (exit 1 on a hit)
   python3 tools/secret_scan.py --history  # every blob in every commit on every fetched branch
+  python3 tools/secret_scan.py --commits origin/main..HEAD   # tree + every file version those commits wrote
 """
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -77,7 +79,7 @@ def _read(path: str) -> bytes | None:
 
 def scan_tree(notes: list[str]) -> list[str]:
     out, unreadable = [], []
-    for path in _git("ls-files", "-z").decode().split("\0"):
+    for path in os.fsdecode(_git("ls-files", "-z")).split("\0"):
         if not path:
             continue                                # the trailing NUL's empty field, not a path
         data = _read(path)
@@ -96,41 +98,74 @@ def scan_tree(notes: list[str]) -> list[str]:
     return out
 
 
-def scan_history() -> list[str]:
-    paths: dict[str, set[str]] = {}
-    for line in _git("rev-list", "--all", "--objects").decode().splitlines():
-        sha, _, p = line.partition(" ")
-        if p:
-            paths.setdefault(sha, set()).add(p)
+def _scan_blobs(paths: dict[str, set[str]], label: str) -> list[str]:
+    """Scan each blob once; report it under one of the paths it was seen at. Objects this clone lacks are counted."""
     cat = subprocess.Popen(["git", "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     assert cat.stdin and cat.stdout
     out, missing = [], 0
-    for sha, ps in paths.items():
-        cat.stdin.write(sha.encode() + b"\n")
-        cat.stdin.flush()
-        header = cat.stdout.readline().split()
-        if len(header) < 3:
-            missing += 1                            # "<sha> missing": an object this clone lacks — counted, reported
-            continue
-        data = cat.stdout.read(int(header[2]))
-        cat.stdout.read(1)
-        if header[1] != b"blob":
-            continue
-        for ln, kind, fp in scan_bytes(data):
-            out.append(f"{sorted(ps)[0]}:{ln}: {kind} ({fp}) [history blob {sha[:8]}]")
-    cat.stdin.close()
-    cat.wait()
+    try:
+        for sha, ps in paths.items():
+            cat.stdin.write(sha.encode() + b"\n")
+            cat.stdin.flush()
+            header = cat.stdout.readline().split()
+            if len(header) < 3:
+                missing += 1                        # "<sha> missing": an object this clone lacks — counted, reported
+                continue
+            data = cat.stdout.read(int(header[2]))
+            cat.stdout.read(1)
+            if header[1] != b"blob":
+                continue                            # trees and commits carry no file text
+            for ln, kind, fp in scan_bytes(data):
+                out.append(f"{sorted(ps)[0]}:{ln}: {kind} ({fp}) [{label} {sha[:8]}]")
+    finally:
+        cat.stdin.close()
+        cat.wait()
     if missing:
-        out.append(f"{missing} object(s) missing from this clone — history NOT fully scanned (run `git fetch --unshallow`)")
+        out.append(f"{missing} object(s) missing from this clone — NOT fully scanned (run `git fetch --unshallow`)")
     return out
+
+
+def _shallow() -> bool:
+    return _git("rev-parse", "--is-shallow-repository").strip() == b"true"
+
+
+def scan_history() -> list[str]:
+    """Every blob in every commit on every fetched branch. A shallow clone cannot see its omitted ancestry, so it is
+    reported as an incomplete scan (a failure), never as clean (Codex #278)."""
+    if _shallow():
+        return ["this is a shallow clone — history NOT fully scanned; run `git fetch --unshallow` first"]
+    paths: dict[str, set[str]] = {}
+    for line in os.fsdecode(_git("rev-list", "--all", "--objects")).splitlines():
+        sha, _, p = line.partition(" ")
+        if p:
+            paths.setdefault(sha, set()).add(p)
+    return _scan_blobs(paths, "history blob")
+
+
+def scan_commits(rev_range: str) -> list[str]:
+    """Every file version written by the commits in `rev_range` (e.g. origin/main..HEAD). A push whose first commit
+    adds a token and second removes it leaves the token in history; the tree scan alone cannot see it (Codex #278)."""
+    paths: dict[str, set[str]] = {}
+    raw = _git("log", "--raw", "--no-abbrev", "--no-renames", "--format=", rev_range)
+    for line in os.fsdecode(raw).splitlines():
+        if not line.startswith(":"):
+            continue                                # blank separator lines between commits, not file entries
+        meta, _, path = line.partition("\t")
+        new_sha = meta.split()[3]
+        if new_sha.strip("0"):                      # all zeros = the file was deleted: nothing written
+            paths.setdefault(new_sha, set()).add(path)
+    return _scan_blobs(paths, "commit blob")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--history", action="store_true")
+    ap.add_argument("--history", action="store_true", help="every blob in every commit on every fetched branch")
+    ap.add_argument("--commits", metavar="RANGE", help="also every file version written by the commits in RANGE")
     ns = ap.parse_args()
     notes: list[str] = []
     hits = scan_history() if ns.history else scan_tree(notes)
+    if ns.commits:
+        hits += scan_commits(ns.commits)
     for n in notes:
         print("secret_scan: note: " + n)
     if hits:
@@ -138,7 +173,8 @@ def main() -> int:
         for h in hits:
             print("  ✗ " + h)
         return 1
-    print("secret_scan: no credential shapes found" + (" in any commit" if ns.history else " in tracked files"))
+    where = "in any commit" if ns.history else "in tracked files" + (f" or the commits in {ns.commits}" if ns.commits else "")
+    print("secret_scan: no credential shapes found " + where)
     return 0
 
 
