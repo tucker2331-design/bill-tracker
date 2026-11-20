@@ -69,3 +69,18 @@ so they would go to the "left off" drawer, not the page).
 2. Show percentiles ("ranks 31 in 100 House members") or only the member's own k of n?
 3. "Our history" visible to the whole team or per person?
 4. Same page for both states now, with PA's votes section marked "not loaded" until batch 3?
+
+## 7. Owner feedback on the desktop mock, and what v5 changed (2026-11-20)
+Mock: https://claude.ai/artifact/PZDNqxWPTBVFgJjD7z6aB4.
+- **Space and priority:** wide view, 12-column grid. Committees and Recent memos (ideas they're circulating) moved up
+  to the first two rows.
+- **Rank:** "Party-line rank: 75 of 128 House Democrats (1 = votes with the party most often on contested roll calls)".
+- **Who they work with → Repeat co-signers + Whose bills they sign:** patterns, not one-offs. A member is listed only
+  with 10+ shared bills AND 1.5× or more their usual rate on other bills from the same party; the committee most shared
+  bills went to is shown. Measured on Borowski 2023–26: the top raw co-signer (Sanchez, 35 of 38) signs 86% of all
+  House Democrats' bills, so she is left out as habitual; Prokopiak signs 29% of hers against 4% usual (8.1×). 12 of
+  135 co-signers and 15 of 141 sponsors meet the rule.
+- **Elections next to the map:** placeholder block (2024/2022 general margin, primary, registration). **Open:** the PA
+  election-results source (PA Department of State returns or Klarner's state legislative returns) needs the owner's
+  OK and a terms check before ingest.
+

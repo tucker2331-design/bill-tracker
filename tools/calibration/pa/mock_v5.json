@@ -1,0 +1,3311 @@
+{
+ "laws": {
+  "bills": 36652,
+  "bills_naming_a_law": 26971,
+  "distinct": 612,
+  "with_5_plus_bills": 271,
+  "with_20_plus_bills": 138,
+  "sessions": "2009-2026"
+ },
+ "law_list": [
+  [
+   "Public School Code of 1949",
+   2901
+  ],
+  [
+   "Title 18 (Crimes and Offenses)",
+   1981
+  ],
+  [
+   "Tax Reform Code of 1971",
+   1926
+  ],
+  [
+   "Title 75 (Vehicles)",
+   1871
+  ],
+  [
+   "Title 42 (Judiciary and Judicial Procedure)",
+   1229
+  ],
+  [
+   "Pennsylvania Election Code",
+   753
+  ],
+  [
+   "Administrative Code of 1929",
+   611
+  ],
+  [
+   "Title 23 (Domestic Relations)",
+   581
+  ],
+  [
+   "Title 53 (Municipalities Generally)",
+   556
+  ],
+  [
+   "Liquor Code",
+   534
+  ],
+  [
+   "Title 35 (Health and Safety)",
+   513
+  ],
+  [
+   "Fiscal Code",
+   413
+  ],
+  [
+   "Human Services Code",
+   410
+  ],
+  [
+   "Title 66 (Public Utilities)",
+   407
+  ],
+  [
+   "Insurance Company Law of 1921",
+   406
+  ],
+  [
+   "Title 34 (Game)",
+   398
+  ],
+  [
+   "Title 51 (Military Affairs)",
+   356
+  ],
+  [
+   "Title 65 (Public Officers)",
+   316
+  ],
+  [
+   "Title 4 (Amusements)",
+   301
+  ],
+  [
+   "Taxpayer Relief Act",
+   246
+  ],
+  [
+   "Title 61 (Prisons and Parole)",
+   233
+  ],
+  [
+   "Title 62 (Procurement)",
+   222
+  ],
+  [
+   "Title 3 (Agriculture)",
+   208
+  ],
+  [
+   "Unemployment Compensation Law",
+   199
+  ],
+  [
+   "Public Welfare Code",
+   197
+  ],
+  [
+   "Title 20 (Decedents, Estates and Fiduciaries)",
+   194
+  ],
+  [
+   "Title 58 (Oil and Gas)",
+   190
+  ],
+  [
+   "Controlled Substance",
+   185
+  ],
+  [
+   "Title 71 (State Government)",
+   185
+  ],
+  [
+   "Pennsylvania Construction Code Act",
+   164
+  ],
+  [
+   "Health Care Facilities Act",
+   160
+  ],
+  [
+   "Title 68 (Real and Personal Property)",
+   145
+  ],
+  [
+   "Pennsylvania Human Relations Act",
+   144
+  ],
+  [
+   "Title 74 (Transportation)",
+   144
+  ],
+  [
+   "Title 25 (Elections)",
+   143
+  ],
+  [
+   "Right-to-Know Law",
+   141
+  ],
+  [
+   "Pennsylvania Prevailing Wage Act",
+   140
+  ],
+  [
+   "Workers' Compensation Act",
+   135
+  ],
+  [
+   "County Code",
+   134
+  ],
+  [
+   "Unfair Trade Practices and Consumer Protection Law",
+   128
+  ],
+  [
+   "Title 40 (Insurance)",
+   128
+  ],
+  [
+   "Local Option Small Games of Chance Act",
+   123
+  ],
+  [
+   "Landlord and Tenant Act of 1951",
+   123
+  ],
+  [
+   "Title 30 (Fish)",
+   120
+  ],
+  [
+   "Second Class Township Code",
+   115
+  ],
+  [
+   "Title 44 (Law and Justice)",
+   114
+  ],
+  [
+   "Title 12 (Commerce and Trade)",
+   114
+  ],
+  [
+   "Public Official Compensation Law",
+   112
+  ],
+  [
+   "Pennsylvania Municipalities Planning Code",
+   110
+  ],
+  [
+   "State Lottery Law",
+   107
+  ],
+  [
+   "Title 27 (Environmental Resources)",
+   100
+  ],
+  [
+   "Title 24 (Education)",
+   96
+  ],
+  [
+   "Medical Care Availability and Reduction of Error (Mcare) Act",
+   94
+  ],
+  [
+   "Minimum Wage Act of 1968",
+   90
+  ],
+  [
+   "Dog Law",
+   89
+  ],
+  [
+   "Medical Practice Act of 1985",
+   87
+  ],
+  [
+   "Local Tax Enabling Act",
+   86
+  ],
+  [
+   "Second Class County Code",
+   83
+  ],
+  [
+   "Public Employe Relations Act",
+   82
+  ],
+  [
+   "Pharmacy Act",
+   79
+  ],
+  [
+   "Professional Nursing Law",
+   76
+  ],
+  [
+   "First Class Township Code",
+   73
+  ],
+  [
+   "Regulatory Review Act",
+   71
+  ],
+  [
+   "Title 64 (Public Authorities and Quasi-Public Corporations)",
+   70
+  ],
+  [
+   "Solid Waste Management Act",
+   69
+  ],
+  [
+   "Crime Victims Act",
+   68
+  ],
+  [
+   "Alternative Energy Portfolio Standards Act",
+   66
+  ],
+  [
+   "Vital Statistics Law of 1953",
+   56
+  ],
+  [
+   "Title 72 (Taxation and Fiscal Affairs)",
+   56
+  ],
+  [
+   "Title 15 (Corporations and Unincorporated Associations)",
+   55
+  ],
+  [
+   "Oil and Gas Act",
+   54
+  ],
+  [
+   "Telemarketer Registration Act",
+   52
+  ],
+  [
+   "Older Adults Protective Services Act",
+   51
+  ],
+  [
+   "Conservation and Natural Resources Act",
+   51
+  ],
+  [
+   "Agricultural Area Security Law",
+   51
+  ],
+  [
+   "Title 8 (Boroughs and Incorporated Towns)",
+   49
+  ],
+  [
+   "Pennsylvania Safe Drinking Water Act",
+   48
+  ],
+  [
+   "Social Workers",
+   47
+  ],
+  [
+   "Mental Health Procedures Act",
+   44
+  ],
+  [
+   "Workforce Development Act",
+   44
+  ],
+  [
+   "Solicitation of Funds for Charitable Purposes Act",
+   44
+  ],
+  [
+   "Housing Finance Agency Law",
+   43
+  ],
+  [
+   "Municipal Waste Planning",
+   43
+  ],
+  [
+   "Local Tax Collection Law",
+   43
+  ],
+  [
+   "Dam Safety and Encroachments Act",
+   42
+  ],
+  [
+   "Medical Marijuana Act",
+   42
+  ],
+  [
+   "Insurance Department Act of 1921",
+   41
+  ],
+  [
+   "Board of Vehicles Act",
+   41
+  ],
+  [
+   "Clean Streams Law",
+   41
+  ],
+  [
+   "Equal Pay Law",
+   40
+  ],
+  [
+   "Real Estate Tax Sale Law",
+   39
+  ],
+  [
+   "Borough Code",
+   39
+  ],
+  [
+   "Clean Indoor Air Act",
+   38
+  ],
+  [
+   "Osteopathic Medical Practice Act",
+   37
+  ],
+  [
+   "Public Employee Pension Forfeiture Act",
+   37
+  ],
+  [
+   "Title 63 (Professions and Occupations (State Licensed)",
+   37
+  ],
+  [
+   "Title 7 (Banks and Banking)",
+   36
+  ],
+  [
+   "Home Improvement Consumer Protection Act",
+   36
+  ],
+  [
+   "Capital Facilities Debt Enabling Act",
+   36
+  ],
+  [
+   "Automobile Lemon Law",
+   35
+  ],
+  [
+   "Third Class City Code",
+   34
+  ],
+  [
+   "Air Pollution Control Act",
+   32
+  ],
+  [
+   "Title 45 (Legal Notices)",
+   32
+  ],
+  [
+   "Institutions of Purely Public Charity Act",
+   32
+  ],
+  [
+   "Municipalities Financial Recovery Act",
+   32
+  ],
+  [
+   "State Highway Law",
+   31
+  ],
+  [
+   "Pennsylvania Sewage Facilities Act",
+   31
+  ],
+  [
+   "Wage Payment and Collection Law",
+   31
+  ],
+  [
+   "Title 16 (Counties)",
+   30
+  ],
+  [
+   "Construction Workplace Misclassification Act",
+   30
+  ],
+  [
+   "Breach of Personal Information Notification Act",
+   29
+  ],
+  [
+   "General County Assessment Law",
+   29
+  ],
+  [
+   "Title 11 (Cities)",
+   29
+  ],
+  [
+   "Dental Law",
+   27
+  ],
+  [
+   "Unfair Insurance Practices Act",
+   27
+  ],
+  [
+   "Keystone Opportunity Zone",
+   27
+  ],
+  [
+   "Commonwealth Attorneys Act",
+   26
+  ],
+  [
+   "Title 54 (Names)",
+   26
+  ],
+  [
+   "University of Pittsburgh--Commonwealth Act",
+   25
+  ],
+  [
+   "Title 1 (General Provisions)",
+   24
+  ],
+  [
+   "Title 38 (Holidays and Observances)",
+   24
+  ],
+  [
+   "Pennsylvania Farmland and Forest Land Assessment Act of 1974",
+   23
+  ],
+  [
+   "Engineer",
+   23
+  ],
+  [
+   "Pennsylvania Drug and Alcohol Abuse Control Act",
+   23
+  ],
+  [
+   "Lincoln University-Commonwealth Act",
+   23
+  ],
+  [
+   "Alternative Energy Investment Act",
+   23
+  ],
+  [
+   "Newborn Child Testing Act",
+   23
+  ],
+  [
+   "Civil Service Act",
+   22
+  ],
+  [
+   "Whistleblower Law",
+   22
+  ],
+  [
+   "Title 46 (Legislature)",
+   22
+  ],
+  [
+   "Sexual Assault Testing and Evidence Collection Act",
+   22
+  ],
+  [
+   "Temple University--Commonwealth Act",
+   21
+  ],
+  [
+   "Scrap Material Theft Prevention Act",
+   21
+  ],
+  [
+   "Gas and Hazardous Liquids Pipelines Act",
+   21
+  ],
+  [
+   "Child Labor Act",
+   21
+  ],
+  [
+   "Tobacco Settlement Act",
+   20
+  ],
+  [
+   "Hazardous Sites Cleanup Act",
+   20
+  ],
+  [
+   "Covered Device Recycling Act",
+   20
+  ],
+  [
+   "Housing Authorities Law",
+   19
+  ],
+  [
+   "Title 26 (Eminent Domain)",
+   19
+  ],
+  [
+   "Storm Water Management Act",
+   19
+  ],
+  [
+   "Funeral Director Law",
+   18
+  ],
+  [
+   "Title 2 (Administrative Law and Procedure)",
+   18
+  ],
+  [
+   "Mechanics' Lien Law of 1963",
+   18
+  ],
+  [
+   "Milk Marketing Law",
+   18
+  ],
+  [
+   "Municipal Pension Plan Funding Standard and Recovery Act",
+   17
+  ],
+  [
+   "Pennsylvania Infrastructure Investment Authority Act",
+   17
+  ],
+  [
+   "Achieving Better Care by Monitoring All Prescriptions Program (ABC-MAP) Act",
+   17
+  ],
+  [
+   "Disease Prevention and Control Law of 1955",
+   16
+  ],
+  [
+   "Real Estate Licensing and Registration Act",
+   16
+  ],
+  [
+   "Title 37 (Historical and Museums)",
+   16
+  ],
+  [
+   "Title 5 (Athletics and Sports)",
+   16
+  ],
+  [
+   "Steel Products Procurement Act",
+   16
+  ],
+  [
+   "Assessors Certification Act",
+   16
+  ],
+  [
+   "Credit Reporting Agency Act",
+   16
+  ],
+  [
+   "Bingo Law",
+   15
+  ],
+  [
+   "Tax Increment Financing Act",
+   15
+  ],
+  [
+   "Apprenticeship and Training Act",
+   15
+  ],
+  [
+   "Pennsylvania Municipal Retirement Law",
+   15
+  ],
+  [
+   "Real Estate Appraisers Certification Act",
+   15
+  ],
+  [
+   "Oil and Gas Lease Act",
+   15
+  ],
+  [
+   "Surface Mining Conservation and Reclamation Act",
+   14
+  ],
+  [
+   "Title 48 (Lodging and Housing)",
+   14
+  ],
+  [
+   "Manufactured Home Community Rights Act",
+   14
+  ],
+  [
+   "CPA Law",
+   14
+  ],
+  [
+   "Title 67 (Public Welfare)",
+   14
+  ],
+  [
+   "Police Officer",
+   13
+  ],
+  [
+   "Community and Economic Development Enhancement Act",
+   13
+  ],
+  [
+   "Early Intervention Services System Act",
+   13
+  ],
+  [
+   "Title 22 (Detectives and Private Police)",
+   12
+  ],
+  [
+   "Tuition Account Programs and College Savings Bond Act",
+   12
+  ],
+  [
+   "Alternative Fuels Incentive Act",
+   12
+  ],
+  [
+   "Banking Code of 1965",
+   12
+  ],
+  [
+   "Environmental Hearing Board Act",
+   12
+  ],
+  [
+   "Price Gouging Act",
+   12
+  ],
+  [
+   "Physical Therapy Practice Act",
+   12
+  ],
+  [
+   "Biofuel Development and In-State Production Incentive Act",
+   11
+  ],
+  [
+   "County Pension Law",
+   11
+  ],
+  [
+   "Private Licensed Schools Act",
+   11
+  ],
+  [
+   "Title 9 (Burial Grounds)",
+   11
+  ],
+  [
+   "National Human Trafficking Resource Center Hotline Notification Act",
+   11
+  ],
+  [
+   "Family Caregiver Support Act",
+   10
+  ],
+  [
+   "Local Economic Revitalization Tax Assistance Act",
+   10
+  ],
+  [
+   "Title 13 (Commercial Code)",
+   10
+  ],
+  [
+   "Medicare Supplement Insurance Act",
+   10
+  ],
+  [
+   "Title 61 (Penal and Correctional Institutions)",
+   10
+  ],
+  [
+   "Pennsylvania Pesticide Control Act of 1973",
+   10
+  ],
+  [
+   "Rail Freight Preservation and Improvement Act",
+   10
+  ],
+  [
+   "Private Academic Schools Act",
+   10
+  ],
+  [
+   "Chiropractic Practice Act",
+   10
+  ],
+  [
+   "Pharmacy Audit Integrity and Transparency Act",
+   10
+  ],
+  [
+   "Health Care Cost Containment Act",
+   9
+  ],
+  [
+   "Notary Public Law",
+   9
+  ],
+  [
+   "Confidentiality of HIV-Related Information Act",
+   9
+  ],
+  [
+   "Second Class County Port Authority Act",
+   9
+  ],
+  [
+   "Fourth to Eighth Class and Selective County Assessment Law",
+   9
+  ],
+  [
+   "Contractor and Subcontractor Payment Act",
+   9
+  ],
+  [
+   "Dormant Oil and Gas Act",
+   9
+  ],
+  [
+   "Health Club Act",
+   9
+  ],
+  [
+   "First and Second Class County Property Tax Relief Act",
+   9
+  ],
+  [
+   "Pennsylvania Web Accountability and Transparency (PennWATCH) Act",
+   9
+  ],
+  [
+   "Architects Licensure Law",
+   9
+  ],
+  [
+   "Title 57 (Notaries Public)",
+   9
+  ],
+  [
+   "Protecting Pennsylvania's Investments Act",
+   9
+  ],
+  [
+   "Department of Banking and Securities Code",
+   9
+  ],
+  [
+   "Patient Test Result Information Act",
+   9
+  ],
+  [
+   "Main Street Act",
+   8
+  ],
+  [
+   "Private Detective Act of 1953",
+   8
+  ],
+  [
+   "Conservation District Law",
+   8
+  ],
+  [
+   "Storage Tank and Spill Prevention Act",
+   8
+  ],
+  [
+   "Clinical Laboratory Act",
+   8
+  ],
+  [
+   "Pennsylvania Labor Relations Act",
+   8
+  ],
+  [
+   "Practical Nurse Law",
+   8
+  ],
+  [
+   "Pennsylvania Fair Dealership Law",
+   8
+  ],
+  [
+   "Outdoor Advertising Control Act of 1971",
+   8
+  ],
+  [
+   "Veterinary Medicine Practice Act",
+   8
+  ],
+  [
+   "Credit Services Act",
+   8
+  ],
+  [
+   "Pennsylvania REAL ID Compliance Act",
+   8
+  ],
+  [
+   "Pennsylvania Conservation Corps Act",
+   7
+  ],
+  [
+   "Race Horse Industry Reform Act",
+   7
+  ],
+  [
+   "Oil and Gas Conservation Law",
+   7
+  ],
+  [
+   "Combustible and Flammable Liquids Act",
+   7
+  ],
+  [
+   "Auctioneer Licensing and Trading Assistant Registration Act",
+   7
+  ],
+  [
+   "Professional Psychologists Practice Act",
+   7
+  ],
+  [
+   "Title 50 (Mental Health)",
+   7
+  ],
+  [
+   "Mental Health and Intellectual Disability Act of 1966",
+   7
+  ],
+  [
+   "Hazardous Material Emergency Planning and Response Act",
+   6
+  ],
+  [
+   "Economic Development Agency",
+   6
+  ],
+  [
+   "Department of Banking Code",
+   6
+  ],
+  [
+   "Reliable Educational Assistance for College Hopefuls Scholarship",
+   6
+  ],
+  [
+   "State Public School Building Authority Act",
+   6
+  ],
+  [
+   "Rural Pennsylvania Revitalization Act",
+   6
+  ],
+  [
+   "Transit Revitalization Investment District Act",
+   6
+  ],
+  [
+   "Speech-Language and Hearing Licensure Act",
+   6
+  ],
+  [
+   "Optometric Practice and Licensure Act",
+   6
+  ],
+  [
+   "Small Business Incubators Act",
+   6
+  ],
+  [
+   "Volunteer Health Services Act",
+   6
+  ],
+  [
+   "Fair Credit Extension Uniformity Act",
+   6
+  ],
+  [
+   "Community and Economic Improvement Act",
+   6
+  ],
+  [
+   "Municipal Code and Ordinance Compliance Act",
+   6
+  ],
+  [
+   "Public Utility Confidential Security Information Disclosure Protection Act",
+   6
+  ],
+  [
+   "Donated Food Limited Liability Act",
+   6
+  ],
+  [
+   "Main Street",
+   6
+  ],
+  [
+   "Nurse Aide Resident Abuse Prevention Training Act",
+   6
+  ],
+  [
+   "Outpatient Psychiatric Oversight Act",
+   6
+  ],
+  [
+   "Childhood Blood Lead Test Act",
+   6
+  ],
+  [
+   "Fourth to Eighth Class County Assessment Law",
+   5
+  ],
+  [
+   "Public Auditorium Authorities Law",
+   5
+  ],
+  [
+   "Pennsylvania Quality Improvement Act",
+   5
+  ],
+  [
+   "Crane Operator Licensure Act",
+   5
+  ],
+  [
+   "Sign Language Interpreter and Transliterator State Registration Act",
+   5
+  ],
+  [
+   "Coal Refuse Disposal Control Act",
+   5
+  ],
+  [
+   "Health Security Act",
+   5
+  ],
+  [
+   "Pawnbrokers License Act",
+   5
+  ],
+  [
+   "Tobacco Product Manufacturer Directory Act",
+   5
+  ],
+  [
+   "American",
+   5
+  ],
+  [
+   "Uniform Crime Reporting Act",
+   5
+  ],
+  [
+   "Title 10 (Charities)",
+   5
+  ],
+  [
+   "Neighborhood Improvement District Act",
+   5
+  ],
+  [
+   "Towing and Towing Storage Facility Standards Act",
+   5
+  ],
+  [
+   "Acupuncture Licensure Act",
+   5
+  ],
+  [
+   "Check Casher Licensing Act",
+   5
+  ],
+  [
+   "Public Works Contractors' Bond Law of 1967",
+   5
+  ],
+  [
+   "Pennsylvania Breast and Cervical Cancer Early Screening Act",
+   5
+  ],
+  [
+   "Special Ad Hoc Municipal Police and Firefighter Postretirement Adjustment Act",
+   5
+  ],
+  [
+   "Pennsylvania Intergovernmental Cooperation Authority Act for Cities of the First Class",
+   5
+  ],
+  [
+   "Delaware River Basin Compact",
+   5
+  ],
+  [
+   "Public Bathing Law",
+   5
+  ],
+  [
+   "Title 29 (Federal Relations)",
+   5
+  ],
+  [
+   "Maternal Mortality Review Act",
+   5
+  ],
+  [
+   "Religious Freedom Protection Act",
+   5
+  ],
+  [
+   "Mobile Home Park Rights Act",
+   4
+  ],
+  [
+   "Water and Sewer Systems Assistance Act",
+   4
+  ],
+  [
+   "Keystone Recreation",
+   4
+  ],
+  [
+   "Lethal Weapons Training Act",
+   4
+  ],
+  [
+   "Industrialized Housing Act",
+   4
+  ],
+  [
+   "Health Maintenance Organization Act",
+   4
+  ],
+  [
+   "Pennsylvania Innkeepers' Rights Act",
+   4
+  ],
+  [
+   "Nursing Home Administrators License Act",
+   4
+  ],
+  [
+   "Merchant Marine World War II Veterans Bonus Act",
+   4
+  ],
+  [
+   "Mental Health or Mental Retardation Facility Closure Act",
+   4
+  ],
+  [
+   "Public Safety Emergency Telephone Act",
+   4
+  ],
+  [
+   "First Class City Home Rule Act",
+   4
+  ],
+  [
+   "Legislative Code of Ethics",
+   4
+  ],
+  [
+   "Freedom to Breastfeed Act",
+   4
+  ],
+  [
+   "Unfair Sales Act",
+   4
+  ],
+  [
+   "H2O PA Act",
+   4
+  ],
+  [
+   "Professional Educator Discipline Act",
+   4
+  ],
+  [
+   "Children's Health Care Act",
+   4
+  ],
+  [
+   "Acupuncture Registration Act",
+   4
+  ],
+  [
+   "Prescribed Pediatric Extended Care Centers Act",
+   4
+  ],
+  [
+   "Rabies Prevention and Control",
+   4
+  ],
+  [
+   "Highway-Railroad and Highway Bridge Capital Budget Act for 1982-1983",
+   4
+  ],
+  [
+   "Land Recycling and Environmental Remediation Standards Act",
+   4
+  ],
+  [
+   "Pennsylvania Securities Act of 1972",
+   4
+  ],
+  [
+   "Abandoned and Blighted Property Conservatorship Act",
+   4
+  ],
+  [
+   "Self-Service Storage Facility Act",
+   4
+  ],
+  [
+   "Flood Insurance Education and Information Act",
+   4
+  ],
+  [
+   "Chester Pike",
+   4
+  ],
+  [
+   "Radiation Protection Act",
+   4
+  ],
+  [
+   "First Class City Business Tax Reform Act",
+   4
+  ],
+  [
+   "Tobacco Settlement Agreement Act",
+   4
+  ],
+  [
+   "Adult Protective Services Act",
+   4
+  ],
+  [
+   "Independent Living Services Act",
+   4
+  ],
+  [
+   "Charitable Gift Annuity Exemption Act",
+   4
+  ],
+  [
+   "Port of Pittsburgh Commission Act",
+   4
+  ],
+  [
+   "Women's",
+   4
+  ],
+  [
+   "Sports Raffle Charities Act",
+   4
+  ],
+  [
+   "Occupational Therapy Practice Act",
+   3
+  ],
+  [
+   "Accident and Health Filing Reform Act",
+   3
+  ],
+  [
+   "World War II Veterans' Compensation Act",
+   3
+  ],
+  [
+   "Korean Conflict Veterans' Compensation Act",
+   3
+  ],
+  [
+   "Vietnam Conflict Veterans' Compensation Act",
+   3
+  ],
+  [
+   "Energy Conservation and Assistance Act",
+   3
+  ],
+  [
+   "State Fire Commissioner Act",
+   3
+  ],
+  [
+   "Insurance Payment to Registered Nurse Law",
+   3
+  ],
+  [
+   "Coal and Gas Resource Coordination Act",
+   3
+  ],
+  [
+   "Volunteer Fire Company and Volunteer Ambulance Service Grant Act",
+   3
+  ],
+  [
+   "New Home Construction Local Tax Abatement Act",
+   3
+  ],
+  [
+   "Library Code",
+   3
+  ],
+  [
+   "Children's Trust Fund Act",
+   3
+  ],
+  [
+   "Massage Therapy Law",
+   3
+  ],
+  [
+   "Old Possessions Road",
+   3
+  ],
+  [
+   "Pennsylvania Agricultural Fair Act",
+   3
+  ],
+  [
+   "Bituminous Mine Subsidence and Land Conservation Act",
+   3
+  ],
+  [
+   "Downtown Location Law",
+   3
+  ],
+  [
+   "Medical Foods Insurance Coverage Act",
+   3
+  ],
+  [
+   "State Restaurant Fund",
+   3
+  ],
+  [
+   "Market Street Bridge",
+   3
+  ],
+  [
+   "Sheriff Fee Act",
+   3
+  ],
+  [
+   "Economic Development Financing Law",
+   3
+  ],
+  [
+   "Global War on Terrorism Bonus Payment Bond Fund",
+   3
+  ],
+  [
+   "Savings Association Code of 1967",
+   3
+  ],
+  [
+   "General Appropriation Act of 2012",
+   3
+  ],
+  [
+   "York Road",
+   3
+  ],
+  [
+   "\"Pocono Mountain Memorial Parkway\"",
+   3
+  ],
+  [
+   "State System of Higher Education Intellectual Property Act",
+   3
+  ],
+  [
+   "Pennsylvania Fair Educational Opportunities Act",
+   3
+  ],
+  [
+   "Blair Mill Road",
+   3
+  ],
+  [
+   "Bituminous Coal Mine Safety Act",
+   3
+  ],
+  [
+   "Cancer Drug Repository Program Act",
+   3
+  ],
+  [
+   "Store and Theatre Tax Act",
+   3
+  ],
+  [
+   "Pennsylvania Affordable Housing Act",
+   3
+  ],
+  [
+   "Frozen Dessert Law",
+   3
+  ],
+  [
+   "Job Enhancement Act",
+   3
+  ],
+  [
+   "Interstate Medical Licensure Compact Act",
+   3
+  ],
+  [
+   "Dishong Mountain Road",
+   3
+  ],
+  [
+   "General Appropriation Act of 2020",
+   3
+  ],
+  [
+   "Seasonal Farm Labor Act",
+   3
+  ],
+  [
+   "Local Health Administration Law",
+   3
+  ],
+  [
+   "Public Works Employment Verification Act",
+   3
+  ],
+  [
+   "First Class City Public Education Home Rule Act",
+   3
+  ],
+  [
+   "Stroke System of Care Act",
+   3
+  ],
+  [
+   "Emergency Relief Sales Tax Act",
+   3
+  ],
+  [
+   "Elderly Immunization Act",
+   3
+  ],
+  [
+   "Lake Winola Access",
+   3
+  ],
+  [
+   "Title 73 (Townships)",
+   3
+  ],
+  [
+   "Exit 119",
+   3
+  ],
+  [
+   "Landscape Architects' Registration Law",
+   2
+  ],
+  [
+   "Stony Creek Wild and Scenic River Act",
+   2
+  ],
+  [
+   "celestine",
+   2
+  ],
+  [
+   "New Economy Technology Scholarship Act",
+   2
+  ],
+  [
+   "Continuing-Care Provider Registration and Disclosure Act",
+   2
+  ],
+  [
+   "Higher Education Equal Opportunity Act",
+   2
+  ],
+  [
+   "General Appropriation Act of 2008",
+   2
+  ],
+  [
+   "Emergency Medical Services Act",
+   2
+  ],
+  [
+   "Unsolicited Telecommunication Advertisement Act",
+   2
+  ],
+  [
+   "Pennsylvania Climate Change Act",
+   2
+  ],
+  [
+   "Henry Road",
+   2
+  ],
+  [
+   "Uniform Facsimile Signature of Public Officials Act",
+   2
+  ],
+  [
+   "Debt Management Services Act",
+   2
+  ],
+  [
+   "Social Security Number Privacy Act",
+   2
+  ],
+  [
+   "Volunteer Fire Company",
+   2
+  ],
+  [
+   "Long-Term Care Patient Access to Pharmaceuticals Act",
+   2
+  ],
+  [
+   "State Adverse Interest Act",
+   2
+  ],
+  [
+   "Manufactured Housing Improvement Act",
+   2
+  ],
+  [
+   "Viatical Settlements Act",
+   2
+  ],
+  [
+   "Scranton State School for the Deaf",
+   2
+  ],
+  [
+   "Public Employee Fair Share Fee Law",
+   2
+  ],
+  [
+   "Noncoal Surface Mining Conservation and Reclamation Act",
+   2
+  ],
+  [
+   "Improvement of Deteriorating Real Property or Areas Tax Exemption Act",
+   2
+  ],
+  [
+   "Governor's Residence",
+   2
+  ],
+  [
+   "Mental Health and Mental Retardation Act of 1966",
+   2
+  ],
+  [
+   "U.S. Business Route 6",
+   2
+  ],
+  [
+   "Community Services Block Grant Act",
+   2
+  ],
+  [
+   "Iraq War Veterans' Compensation Bond Fund",
+   2
+  ],
+  [
+   "Safety",
+   2
+  ],
+  [
+   "Pompey Hill Road",
+   2
+  ],
+  [
+   "Consumer Discount Company Act",
+   2
+  ],
+  [
+   "First Class School District Liquor Sales Tax Act of 1971",
+   2
+  ],
+  [
+   "Deputy Sheriffs' Education and Training Act",
+   2
+  ],
+  [
+   "Fleming Park Road",
+   2
+  ],
+  [
+   "Science",
+   2
+  ],
+  [
+   "Persian Gulf Conflict Veterans' Benefit Act",
+   2
+  ],
+  [
+   "Exit 28",
+   2
+  ],
+  [
+   "Methadone Death and Incident Review Act",
+   2
+  ],
+  [
+   "State Personal Property Tax Act",
+   2
+  ],
+  [
+   "Intergovernmental Cooperation Authority Act for Cities of the Second Class",
+   2
+  ],
+  [
+   "Unconventional Well Report Act",
+   2
+  ],
+  [
+   "Flood Plain Management Act",
+   2
+  ],
+  [
+   "Peer Review Protection Act",
+   2
+  ],
+  [
+   "Primary Stroke Center Recognition Act",
+   2
+  ],
+  [
+   "Searights Road interchange",
+   2
+  ],
+  [
+   "Community-Based Health Care Act",
+   2
+  ],
+  [
+   "Diamondville Bridge",
+   2
+  ],
+  [
+   "Admiral Peary Highway",
+   2
+  ],
+  [
+   "Patriot Day and observed as a holiday",
+   2
+  ],
+  [
+   "Monument Orviston Road",
+   2
+  ],
+  [
+   "Garrett Road",
+   2
+  ],
+  [
+   "Farmers' Market Development Act",
+   2
+  ],
+  [
+   "S. Porter Street",
+   2
+  ],
+  [
+   "Edge Hill Road",
+   2
+  ],
+  [
+   "Knights Road",
+   2
+  ],
+  [
+   "Pennsylvania Fair Plan Act",
+   2
+  ],
+  [
+   "Hardwoods Development Council Act",
+   2
+  ],
+  [
+   "Morton Avenue",
+   2
+  ],
+  [
+   "Individual Net Income Tax Act",
+   2
+  ],
+  [
+   "Second Class City Treasurer's Sale and Collection Act",
+   2
+  ],
+  [
+   "General Appropriation Act of 2019",
+   2
+  ],
+  [
+   "Penn's Landing to facilitate the",
+   2
+  ],
+  [
+   "Lost Creek",
+   2
+  ],
+  [
+   "Milk Marketing Fee Act",
+   2
+  ],
+  [
+   "William Penn Avenue",
+   2
+  ],
+  [
+   "Railroad Street",
+   2
+  ],
+  [
+   "Fitzwatertown Road",
+   2
+  ],
+  [
+   "Domestic Violence Health Care Response Act",
+   2
+  ],
+  [
+   "Pennsylvania Turnpike",
+   2
+  ],
+  [
+   "County Line Road",
+   2
+  ],
+  [
+   "Commonwealth Higher Education Modernization Act",
+   2
+  ],
+  [
+   "Use and Storage Tax Act",
+   2
+  ],
+  [
+   "Diesel-Powered Motor Vehicle Idling Act",
+   2
+  ],
+  [
+   "State Route 2023",
+   2
+  ],
+  [
+   "Cave Protection Act",
+   2
+  ],
+  [
+   "Water Services Act",
+   2
+  ],
+  [
+   "Overdose Mapping Act",
+   2
+  ],
+  [
+   "Wholesale Prescription Drug Distributors License Act",
+   2
+  ],
+  [
+   "Plain Language Consumer Contract Act",
+   2
+  ],
+  [
+   "Workers' Compensation Security Fund Act",
+   2
+  ],
+  [
+   "Assistance and Service Animal Integrity Act",
+   2
+  ],
+  [
+   "Wild Resource Conservation Act",
+   2
+  ],
+  [
+   "General Appropriation Act of 2024",
+   2
+  ],
+  [
+   "Germantown Avenue",
+   2
+  ],
+  [
+   "Children",
+   2
+  ],
+  [
+   "Peace Church situate",
+   2
+  ],
+  [
+   "Pennsylvania Industrial Development Authority Act",
+   1
+  ],
+  [
+   "Pennsylvania Appalachian Trail Act",
+   1
+  ],
+  [
+   "Senior Tax Reduction Incentive Volunteer Exchange Program",
+   1
+  ],
+  [
+   "Pennsylvania Gaming Economic Development and Tourism Fund Capital Budget Itemization Act of 2007",
+   1
+  ],
+  [
+   "Model Act for the Regulation of Credit Life Insurance and Credit Accident and Health Insurance",
+   1
+  ],
+  [
+   "Willow Grove Joint Interagency Installation",
+   1
+  ],
+  [
+   "Volunteer Firefighters' Relief Association Act",
+   1
+  ],
+  [
+   "Pennsylvania Trauma Systems Stabilization Act",
+   1
+  ],
+  [
+   "Casualty and Surety Rate Regulatory Act",
+   1
+  ],
+  [
+   "Capital Budget Project Itemization Act of 2005-2006",
+   1
+  ],
+  [
+   "Dormitory Sprinkler System Act",
+   1
+  ],
+  [
+   "Worker and Community Right-to-Know Act",
+   1
+  ],
+  [
+   "Motivational Boot Camp Act",
+   1
+  ],
+  [
+   "Food Act",
+   1
+  ],
+  [
+   "Hazardous Sites CleanUp Funding Act",
+   1
+  ],
+  [
+   "Cigarette Fire Safety and Firefighter Protection Act",
+   1
+  ],
+  [
+   "Private Prison Moratorium and Study Act",
+   1
+  ],
+  [
+   "Noncontrolled Substances Reporting and Registration Act",
+   1
+  ],
+  [
+   "Official Visitation of Prisons Act",
+   1
+  ],
+  [
+   "Berean Institute",
+   1
+  ],
+  [
+   "Public Employee Retirement Commission Act",
+   1
+  ],
+  [
+   "Barry King Memorial Bridge",
+   1
+  ],
+  [
+   "Capitol Centennial Commission Act",
+   1
+  ],
+  [
+   "Reliable Educational Assistance for College Hopefuls Scholarship for Community College",
+   1
+  ],
+  [
+   "Reliable Educational Assistance for College Hopefuls Scholarship for STEM Majors",
+   1
+  ],
+  [
+   "General Appropriation Act of 2010",
+   1
+  ],
+  [
+   "Bluff Recession and Setback Act",
+   1
+  ],
+  [
+   "Organ and Bone Marrow Donor Act",
+   1
+  ],
+  [
+   "Motor Vehicle Sales Finance Act",
+   1
+  ],
+  [
+   "Yellow Springs Drive",
+   1
+  ],
+  [
+   "Reliable Educational Assistance for College Hopefuls Scholarship for Business and Entrepreneurship",
+   1
+  ],
+  [
+   "Reliable Educational Assistance for College Hopefuls Scholarship for Education",
+   1
+  ],
+  [
+   "Reliable Educational Assistance for College Hopefuls Scholarship for Arts and Culture",
+   1
+  ],
+  [
+   "State Bridge",
+   1
+  ],
+  [
+   "Ewing Road interchange",
+   1
+  ],
+  [
+   "31st Street Bridge",
+   1
+  ],
+  [
+   "Boiler and Unfired Pressure Vessel Law",
+   1
+  ],
+  [
+   "Elk Run Road",
+   1
+  ],
+  [
+   "Labor Anti-Injunction Act",
+   1
+  ],
+  [
+   "Portable Electronics Insurance Act",
+   1
+  ],
+  [
+   "Ogontz Armory",
+   1
+  ],
+  [
+   "Employment Agency Law",
+   1
+  ],
+  [
+   "Title 17 (Credit Unions)",
+   1
+  ],
+  [
+   "Plumbing System Lead Ban and Notification Act",
+   1
+  ],
+  [
+   "Title 65 (Public officers)",
+   1
+  ],
+  [
+   "Washington Monument Park",
+   1
+  ],
+  [
+   "Indigenous Mineral Resources Development Act",
+   1
+  ],
+  [
+   "Easton-Phillipsburg Toll Bridge",
+   1
+  ],
+  [
+   "Retired Law Enforcement Identification Act",
+   1
+  ],
+  [
+   "Knupp Road",
+   1
+  ],
+  [
+   "Iraq War Veterans' Compensation Bond Sinking Fund",
+   1
+  ],
+  [
+   "Bath Road",
+   1
+  ],
+  [
+   "Development Permit Extension Act",
+   1
+  ],
+  [
+   "Public Defender Act",
+   1
+  ],
+  [
+   "University of Pittsburgh-Commonwealth Act",
+   1
+  ],
+  [
+   "Telephone Subscriber Directory Express Consent Act",
+   1
+  ],
+  [
+   "Antihazing Law",
+   1
+  ],
+  [
+   "Noxious Weed Control Law",
+   1
+  ],
+  [
+   "Motor Vehicle Physical Damage Appraiser Act",
+   1
+  ],
+  [
+   "Co-operative Agricultural Association Corporate Net Income Tax Act",
+   1
+  ],
+  [
+   "Pennsylvania Cancer Control",
+   1
+  ],
+  [
+   "Pennsylvania Greenhouse Gas Regulation Implementation Act",
+   1
+  ],
+  [
+   "State Military College Legislative Appointment Initiative Program Act",
+   1
+  ],
+  [
+   "Exit 4",
+   1
+  ],
+  [
+   "Old Pittsburgh Road interchange",
+   1
+  ],
+  [
+   "Business U.S. Route 220",
+   1
+  ],
+  [
+   "Church View Road",
+   1
+  ],
+  [
+   "REAL ID Nonparticipation Act",
+   1
+  ],
+  [
+   "Castile Run Road",
+   1
+  ],
+  [
+   "Sudden Cardiac Arrest Prevention Act",
+   1
+  ],
+  [
+   "Wireless Broadband Collocation Act",
+   1
+  ],
+  [
+   "Friend Lea Road over U.S. Route 219",
+   1
+  ],
+  [
+   "General Appropriation Act of 2017",
+   1
+  ],
+  [
+   "Sheriff and Deputy Sheriff Education and Training Act",
+   1
+  ],
+  [
+   "Castor Avenue",
+   1
+  ],
+  [
+   "Insurance Regulation and Oversight Fund Act",
+   1
+  ],
+  [
+   "Fort Washington Avenue",
+   1
+  ],
+  [
+   "Agricultural Liming Materials Act",
+   1
+  ],
+  [
+   "Congressional Redistricting Act of 2011",
+   1
+  ],
+  [
+   "East High Street",
+   1
+  ],
+  [
+   "Washington Street",
+   1
+  ],
+  [
+   "Right-to-Try Act",
+   1
+  ],
+  [
+   "Henry Avenue",
+   1
+  ],
+  [
+   "\"Temple University--Commonwealth Act",
+   1
+  ],
+  [
+   "Pennsylvania Commission for the United States Semiquincentennial Act",
+   1
+  ],
+  [
+   "Tax Reform Code",
+   1
+  ],
+  [
+   "Friend Lea Road",
+   1
+  ],
+  [
+   "Industrial Homework Law",
+   1
+  ],
+  [
+   "Urban Redevelopment Law",
+   1
+  ],
+  [
+   "Indoor Tanning Regulation Act",
+   1
+  ],
+  [
+   "Taxpayer-Funded Advertising Transparency Act",
+   1
+  ],
+  [
+   "Conservation and Preservation Easements Act",
+   1
+  ],
+  [
+   "Title 14 (Community Affairs)",
+   1
+  ],
+  [
+   "Hospice and Home Health Prescription Medication Disposal Act",
+   1
+  ],
+  [
+   "Temple University-Commonwealth Act",
+   1
+  ],
+  [
+   "Willow Grove Interchange",
+   1
+  ],
+  [
+   "Intergovernmental Cooperation Authorities Act for Cities of the Third Class",
+   1
+  ],
+  [
+   "Millfair Road",
+   1
+  ],
+  [
+   "West 38th Street",
+   1
+  ],
+  [
+   "General&#160",
+   1
+  ],
+  [
+   "Duquesne Boulevard",
+   1
+  ],
+  [
+   "Grandview Boulevard",
+   1
+  ],
+  [
+   "Pennsylvania Long-term Care Council Act",
+   1
+  ],
+  [
+   "Mon-Fayette Expressway",
+   1
+  ],
+  [
+   "Lebanon Church Road",
+   1
+  ],
+  [
+   "Brierly Lane",
+   1
+  ],
+  [
+   "Exit 24",
+   1
+  ],
+  [
+   "South 4th Street",
+   1
+  ],
+  [
+   "Nyes Road",
+   1
+  ],
+  [
+   "Unserved High-Speed Broadband Funding Program Act",
+   1
+  ],
+  [
+   "\"Election Day.\"",
+   1
+  ],
+  [
+   "North Broad Street",
+   1
+  ],
+  [
+   "Byberry Road",
+   1
+  ],
+  [
+   "West Main Street",
+   1
+  ],
+  [
+   "Dunnings Highway",
+   1
+  ],
+  [
+   "Meredith Street",
+   1
+  ],
+  [
+   "Lloyd Avenue",
+   1
+  ],
+  [
+   "Lyme and Related Tick-Borne Disease Surveillance",
+   1
+  ],
+  [
+   "Geneva Road",
+   1
+  ],
+  [
+   "Ragers Hill Road",
+   1
+  ],
+  [
+   "Schuylkill Expressway",
+   1
+  ],
+  [
+   "Lawrence Road",
+   1
+  ],
+  [
+   "Jackson Street",
+   1
+  ],
+  [
+   "Rowena Drive",
+   1
+  ],
+  [
+   "Branch Road",
+   1
+  ],
+  [
+   "Renovo Road",
+   1
+  ],
+  [
+   "Title 32 (Forests, Waters and State Parks)",
+   1
+  ],
+  [
+   "Bridge Street",
+   1
+  ],
+  [
+   "Title 43 (Labor)",
+   1
+  ],
+  [
+   "Scalp Avenue",
+   1
+  ],
+  [
+   "Child Internet Protection Act",
+   1
+  ],
+  [
+   "Iverson Road",
+   1
+  ],
+  [
+   "Consumers Sales Tax Act",
+   1
+  ],
+  [
+   "Pennsylvania Blood Bank Act",
+   1
+  ],
+  [
+   "Pennsylvania Rural Health Redesign Center Authority Act",
+   1
+  ],
+  [
+   "General Appropriation Act of 2023",
+   1
+  ],
+  [
+   "Industrial Sites Environmental Assessment Act",
+   1
+  ],
+  [
+   "Lehigh Street",
+   1
+  ],
+  [
+   "Bridge Street Bridge",
+   1
+  ],
+  [
+   "Travel Insurance Modernization Act",
+   1
+  ],
+  [
+   "New Germany Road",
+   1
+  ],
+  [
+   "Employment First Act",
+   1
+  ],
+  [
+   "South Valley Parkway",
+   1
+  ],
+  [
+   "South Cedar Crest Boulevard",
+   1
+  ],
+  [
+   "Educator Discipline Act",
+   1
+  ],
+  [
+   "Pennsylvania Minority Business Development Authority Act",
+   1
+  ],
+  [
+   "Kinship Caregiver Navigator Program Act",
+   1
+  ],
+  [
+   "Lisburn Road",
+   1
+  ],
+  [
+   "Uniform Parcel Identifier Law",
+   1
+  ],
+  [
+   "Crematory Regulation Act",
+   1
+  ],
+  [
+   "Taxpayers' Bill of Rights",
+   1
+  ],
+  [
+   "Bernville Road",
+   1
+  ],
+  [
+   "Radon Certification Act",
+   1
+  ],
+  [
+   "Middletown Road",
+   1
+  ],
+  [
+   "Title 76 (Weights, Measures and Standards)",
+   1
+  ],
+  [
+   "Title 35 (Municipalities Generally)",
+   1
+  ],
+  [
+   "Ferry Road",
+   1
+  ],
+  [
+   "Podiatry Practice Act",
+   1
+  ],
+  [
+   "Rare Disease Advisory Council Act",
+   1
+  ],
+  [
+   "Fair Contracting for Health Care Practitioners Act",
+   1
+  ],
+  [
+   "Cash Consumer Protection Act",
+   1
+  ],
+  [
+   "Broad Street",
+   1
+  ],
+  [
+   "Institutional Assistance Grants Act",
+   1
+  ],
+  [
+   "Hickory Township",
+   1
+  ],
+  [
+   "Pennsylvania ABLE Act",
+   1
+  ],
+  [
+   "State Agency Green Technology Implementation Act",
+   1
+  ],
+  [
+   "River Road",
+   1
+  ],
+  [
+   "Valley Road",
+   1
+  ]
+ ],
+ "legislator": {
+  "member": "H|BOROWSKI",
+  "sessions": [
+   "2023_0",
+   "2025_0"
+  ],
+  "her_bills": 38,
+  "rule": {
+   "min_shared": 10,
+   "min_times": 1.5
+  },
+  "signers_pattern": [
+   {
+    "key": "H|PROKOPIAK",
+    "name": "Prokopiak",
+    "n": 11,
+    "of": 38,
+    "share": 0.289,
+    "usual": 0.036,
+    "times": 8.1,
+    "sessions": 2,
+    "top_cmte": "Veterans Affairs And Emergency Preparedness",
+    "top_cmte_n": 2,
+    "party": "D"
+   },
+   {
+    "key": "H|GILLEN",
+    "name": "Gillen",
+    "n": 10,
+    "of": 38,
+    "share": 0.263,
+    "usual": 0.069,
+    "times": 3.8,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 3,
+    "party": "R"
+   },
+   {
+    "key": "H|CURRY",
+    "name": "Curry",
+    "n": 13,
+    "of": 38,
+    "share": 0.342,
+    "usual": 0.124,
+    "times": 2.8,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 9,
+    "party": "D"
+   },
+   {
+    "key": "H|CERRATO",
+    "name": "Cerrato",
+    "n": 28,
+    "of": 38,
+    "share": 0.737,
+    "usual": 0.299,
+    "times": 2.5,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 5,
+    "party": "D"
+   },
+   {
+    "key": "H|PROBST",
+    "name": "Probst",
+    "n": 24,
+    "of": 38,
+    "share": 0.632,
+    "usual": 0.308,
+    "times": 2.1,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 8,
+    "party": "D"
+   },
+   {
+    "key": "H|BOYD",
+    "name": "Boyd",
+    "n": 13,
+    "of": 38,
+    "share": 0.342,
+    "usual": 0.167,
+    "times": 2.1,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 4,
+    "party": "D"
+   },
+   {
+    "key": "H|KAZEEM",
+    "name": "Kazeem",
+    "n": 11,
+    "of": 38,
+    "share": 0.289,
+    "usual": 0.145,
+    "times": 2.0,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 5,
+    "party": "D"
+   },
+   {
+    "key": "H|CEPEDA-FREYTIZ",
+    "name": "Cepeda-Freytiz",
+    "n": 26,
+    "of": 38,
+    "share": 0.684,
+    "usual": 0.38,
+    "times": 1.8,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 6,
+    "party": "D"
+   },
+   {
+    "key": "H|SHUSTERMAN",
+    "name": "Shusterman",
+    "n": 15,
+    "of": 38,
+    "share": 0.395,
+    "usual": 0.224,
+    "times": 1.8,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 3,
+    "party": "D"
+   },
+   {
+    "key": "H|T. DAVIS",
+    "name": "T. Davis",
+    "n": 11,
+    "of": 38,
+    "share": 0.289,
+    "usual": 0.159,
+    "times": 1.8,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 5,
+    "party": "D"
+   }
+  ],
+  "signers_pattern_count": 12,
+  "signers_total": 135,
+  "signers_habitual": [
+   "Sanchez",
+   "Hill-Evans",
+   "Green",
+   "Khan"
+  ],
+  "i_sign_pattern": [
+   {
+    "key": "H|FRANKEL",
+    "name": "Frankel",
+    "party": "D",
+    "n": 20,
+    "of": 25,
+    "share": 0.8,
+    "usual": 0.231,
+    "times": 3.5,
+    "sessions": 2,
+    "top_cmte": "Judiciary",
+    "top_cmte_n": 10
+   },
+   {
+    "key": "H|PROKOPIAK",
+    "name": "Prokopiak",
+    "party": "D",
+    "n": 14,
+    "of": 21,
+    "share": 0.667,
+    "usual": 0.232,
+    "times": 2.9,
+    "sessions": 2,
+    "top_cmte": "Finance",
+    "top_cmte_n": 6
+   },
+   {
+    "key": "H|MADDEN",
+    "name": "Madden",
+    "party": "D",
+    "n": 10,
+    "of": 17,
+    "share": 0.588,
+    "usual": 0.233,
+    "times": 2.5,
+    "sessions": 2,
+    "top_cmte": "Aging And Older Adult Services",
+    "top_cmte_n": 5
+   },
+   {
+    "key": "H|FIEDLER",
+    "name": "Fiedler",
+    "party": "D",
+    "n": 17,
+    "of": 30,
+    "share": 0.567,
+    "usual": 0.232,
+    "times": 2.4,
+    "sessions": 2,
+    "top_cmte": "Education",
+    "top_cmte_n": 3
+   },
+   {
+    "key": "H|MATZIE",
+    "name": "Matzie",
+    "party": "D",
+    "n": 10,
+    "of": 18,
+    "share": 0.556,
+    "usual": 0.233,
+    "times": 2.4,
+    "sessions": 2,
+    "top_cmte": "Consumer Protection, Technology And Utilities",
+    "top_cmte_n": 8
+   },
+   {
+    "key": "H|PIELLI",
+    "name": "Pielli",
+    "party": "D",
+    "n": 24,
+    "of": 46,
+    "share": 0.522,
+    "usual": 0.231,
+    "times": 2.3,
+    "sessions": 2,
+    "top_cmte": "State Government",
+    "top_cmte_n": 5
+   },
+   {
+    "key": "H|DALEY",
+    "name": "Daley",
+    "party": "D",
+    "n": 19,
+    "of": 38,
+    "share": 0.5,
+    "usual": 0.232,
+    "times": 2.2,
+    "sessions": 2,
+    "top_cmte": "Judiciary",
+    "top_cmte_n": 10
+   },
+   {
+    "key": "H|KHAN",
+    "name": "Khan",
+    "party": "D",
+    "n": 37,
+    "of": 74,
+    "share": 0.5,
+    "usual": 0.229,
+    "times": 2.2,
+    "sessions": 2,
+    "top_cmte": "Human Services",
+    "top_cmte_n": 5
+   },
+   {
+    "key": "H|CURRY",
+    "name": "Curry",
+    "party": "D",
+    "n": 11,
+    "of": 24,
+    "share": 0.458,
+    "usual": 0.233,
+    "times": 2.0,
+    "sessions": 2,
+    "top_cmte": "Health",
+    "top_cmte_n": 5
+   },
+   {
+    "key": "H|O'MARA",
+    "name": "O'Mara",
+    "party": "D",
+    "n": 20,
+    "of": 44,
+    "share": 0.455,
+    "usual": 0.232,
+    "times": 2.0,
+    "sessions": 2,
+    "top_cmte": "Veterans Affairs And Emergency Preparedness",
+    "top_cmte_n": 4
+   }
+  ],
+  "i_sign_pattern_count": 15,
+  "i_sign_sponsors": 141,
+  "i_sign_bills": 857
+ },
+ "law_record": {
+  "Health Care Facilities Act": {
+   "bills": 108,
+   "members_with_record": 171,
+   "pattern_count": 60,
+   "rows": [
+    {
+     "key": "H|CURRY",
+     "district": "164",
+     "cosigned": 12,
+     "of": 47,
+     "sponsored": 0,
+     "rate": 0.255,
+     "usual": 0.054,
+     "times": 4.7
+    },
+    {
+     "key": "H|KRUEGER",
+     "district": "161",
+     "cosigned": 6,
+     "of": 69,
+     "sponsored": 0,
+     "rate": 0.087,
+     "usual": 0.021,
+     "times": 4.2
+    },
+    {
+     "key": "H|VENKAT",
+     "district": "030",
+     "cosigned": 12,
+     "of": 31,
+     "sponsored": 0,
+     "rate": 0.387,
+     "usual": 0.098,
+     "times": 4.0
+    },
+    {
+     "key": "H|TOMLINSON",
+     "district": "018",
+     "cosigned": 5,
+     "of": 69,
+     "sponsored": 0,
+     "rate": 0.072,
+     "usual": 0.021,
+     "times": 3.4
+    },
+    {
+     "key": "H|CEPHAS",
+     "district": "192",
+     "cosigned": 7,
+     "of": 76,
+     "sponsored": 2,
+     "rate": 0.092,
+     "usual": 0.029,
+     "times": 3.2
+    },
+    {
+     "key": "H|DELOZIER",
+     "district": "088",
+     "cosigned": 5,
+     "of": 108,
+     "sponsored": 0,
+     "rate": 0.046,
+     "usual": 0.016,
+     "times": 3.0
+    },
+    {
+     "key": "H|EMRICK",
+     "district": "137",
+     "cosigned": 6,
+     "of": 99,
+     "sponsored": 0,
+     "rate": 0.061,
+     "usual": 0.02,
+     "times": 3.0
+    },
+    {
+     "key": "H|MAYES",
+     "district": "024",
+     "cosigned": 12,
+     "of": 31,
+     "sponsored": 0,
+     "rate": 0.387,
+     "usual": 0.138,
+     "times": 2.8
+    },
+    {
+     "key": "H|RADER",
+     "district": "176",
+     "cosigned": 12,
+     "of": 84,
+     "sponsored": 0,
+     "rate": 0.143,
+     "usual": 0.05,
+     "times": 2.8
+    },
+    {
+     "key": "H|DAY",
+     "district": "187",
+     "cosigned": 7,
+     "of": 92,
+     "sponsored": 2,
+     "rate": 0.076,
+     "usual": 0.03,
+     "times": 2.6
+    },
+    {
+     "key": "H|MARKOSEK",
+     "district": "025",
+     "cosigned": 7,
+     "of": 108,
+     "sponsored": 0,
+     "rate": 0.065,
+     "usual": 0.025,
+     "times": 2.6
+    },
+    {
+     "key": "H|D. MILLER",
+     "district": "042",
+     "cosigned": 8,
+     "of": 92,
+     "sponsored": 5,
+     "rate": 0.087,
+     "usual": 0.036,
+     "times": 2.4
+    }
+   ]
+  },
+  "Human Services Code": {
+   "bills": 292,
+   "members_with_record": 186,
+   "pattern_count": 31,
+   "rows": [
+    {
+     "key": "H|KLUNK",
+     "district": "169",
+     "cosigned": 22,
+     "of": 292,
+     "sponsored": 0,
+     "rate": 0.075,
+     "usual": 0.021,
+     "times": 3.5
+    },
+    {
+     "key": "H|CURRY",
+     "district": "164",
+     "cosigned": 22,
+     "of": 124,
+     "sponsored": 2,
+     "rate": 0.177,
+     "usual": 0.054,
+     "times": 3.3
+    },
+    {
+     "key": "H|WENTLING",
+     "district": "007",
+     "cosigned": 8,
+     "of": 292,
+     "sponsored": 0,
+     "rate": 0.027,
+     "usual": 0.009,
+     "times": 3.2
+    },
+    {
+     "key": "H|FLEMING",
+     "district": "105",
+     "cosigned": 33,
+     "of": 124,
+     "sponsored": 0,
+     "rate": 0.266,
+     "usual": 0.12,
+     "times": 2.2
+    },
+    {
+     "key": "H|FLICK",
+     "district": "083",
+     "cosigned": 11,
+     "of": 124,
+     "sponsored": 0,
+     "rate": 0.089,
+     "usual": 0.044,
+     "times": 2.0
+    },
+    {
+     "key": "H|BURNS",
+     "district": "072",
+     "cosigned": 15,
+     "of": 292,
+     "sponsored": 7,
+     "rate": 0.051,
+     "usual": 0.026,
+     "times": 1.9
+    },
+    {
+     "key": "H|PARKER",
+     "district": "198",
+     "cosigned": 26,
+     "of": 174,
+     "sponsored": 2,
+     "rate": 0.149,
+     "usual": 0.078,
+     "times": 1.9
+    },
+    {
+     "key": "H|WALSH",
+     "district": "117",
+     "cosigned": 9,
+     "of": 169,
+     "sponsored": 1,
+     "rate": 0.053,
+     "usual": 0.028,
+     "times": 1.9
+    },
+    {
+     "key": "H|GAYDOS",
+     "district": "044",
+     "cosigned": 20,
+     "of": 234,
+     "sponsored": 0,
+     "rate": 0.085,
+     "usual": 0.047,
+     "times": 1.8
+    },
+    {
+     "key": "H|HANBIDGE",
+     "district": "061",
+     "cosigned": 57,
+     "of": 234,
+     "sponsored": 9,
+     "rate": 0.244,
+     "usual": 0.133,
+     "times": 1.8
+    },
+    {
+     "key": "H|OTTEN",
+     "district": "155",
+     "cosigned": 69,
+     "of": 234,
+     "sponsored": 0,
+     "rate": 0.295,
+     "usual": 0.164,
+     "times": 1.8
+    },
+    {
+     "key": "H|RIGBY",
+     "district": "071",
+     "cosigned": 8,
+     "of": 234,
+     "sponsored": 0,
+     "rate": 0.034,
+     "usual": 0.019,
+     "times": 1.8
+    }
+   ]
+  },
+  "Older Adults Protective Services Act": {
+   "bills": 37,
+   "members_with_record": 102,
+   "pattern_count": 10,
+   "rows": [
+    {
+     "key": "H|MENTZER",
+     "district": "097",
+     "cosigned": 9,
+     "of": 27,
+     "sponsored": 0,
+     "rate": 0.333,
+     "usual": 0.058,
+     "times": 5.8
+    },
+    {
+     "key": "H|B. MILLER",
+     "district": "041",
+     "cosigned": 5,
+     "of": 22,
+     "sponsored": 0,
+     "rate": 0.227,
+     "usual": 0.057,
+     "times": 4.0
+    },
+    {
+     "key": "H|WARREN",
+     "district": "031",
+     "cosigned": 5,
+     "of": 18,
+     "sponsored": 0,
+     "rate": 0.278,
+     "usual": 0.097,
+     "times": 2.9
+    },
+    {
+     "key": "H|MATZIE",
+     "district": "016",
+     "cosigned": 5,
+     "of": 37,
+     "sponsored": 0,
+     "rate": 0.135,
+     "usual": 0.05,
+     "times": 2.7
+    },
+    {
+     "key": "H|FREEMAN",
+     "district": "136",
+     "cosigned": 15,
+     "of": 37,
+     "sponsored": 0,
+     "rate": 0.405,
+     "usual": 0.161,
+     "times": 2.5
+    },
+    {
+     "key": "H|CONKLIN",
+     "district": "077",
+     "cosigned": 6,
+     "of": 37,
+     "sponsored": 0,
+     "rate": 0.162,
+     "usual": 0.07,
+     "times": 2.3
+    },
+    {
+     "key": "H|NEILSON",
+     "district": "174",
+     "cosigned": 11,
+     "of": 33,
+     "sponsored": 0,
+     "rate": 0.333,
+     "usual": 0.145,
+     "times": 2.3
+    },
+    {
+     "key": "H|MOUL",
+     "district": "091",
+     "cosigned": 13,
+     "of": 37,
+     "sponsored": 0,
+     "rate": 0.351,
+     "usual": 0.164,
+     "times": 2.1
+    },
+    {
+     "key": "H|BRENNAN",
+     "district": "029",
+     "cosigned": 5,
+     "of": 15,
+     "sponsored": 1,
+     "rate": 0.333,
+     "usual": 0.163,
+     "times": 2.0
+    },
+    {
+     "key": "H|PASHINSKI",
+     "district": "121",
+     "cosigned": 7,
+     "of": 37,
+     "sponsored": 0,
+     "rate": 0.189,
+     "usual": 0.099,
+     "times": 1.9
+    }
+   ]
+  }
+ },
+ "first_session": {
+  "074": "2021",
+  "202": "2017",
+  "059": "2021",
+  "170": "2009",
+  "198": "2009",
+  "060": "2009",
+  "187": "2009",
+  "145": "2015",
+  "135": "2009",
+  "051": "2023",
+  "033": "2023",
+  "108": "2023",
+  "136": "2009",
+  "191": "2015",
+  "055": "2023",
+  "175": "2019",
+  "042": "2013",
+  "061": "2019",
+  "096": "2025",
+  "014": "2025",
+  "017": "2019",
+  "189": "2023",
+  "022": "2023",
+  "194": "2023",
+  "001": "2009",
+  "019": "2021",
+  "062": "2019",
+  "113": "2023",
+  "023": "2009",
+  "151": "2023",
+  "144": "2023",
+  "130": "2011",
+  "165": "2019",
+  "140": "2023",
+  "172": "2025",
+  "115": "2017",
+  "103": "2011",
+  "193": "2025",
+  "075": "2021",
+  "155": "2019",
+  "174": "2011",
+  "104": "2023",
+  "146": "2019",
+  "093": "2023",
+  "035": "2025",
+  "200": "2017",
+  "007": "2015",
+  "105": "2023",
+  "046": "2015",
+  "158": "2019",
+  "173": "2023",
+  "094": "2023",
+  "006": "2009",
+  "125": "2021",
+  "077": "2009",
+  "163": "2009",
+  "106": "2017",
+  "031": "2017",
+  "185": "2021",
+  "040": "2019",
+  "010": "2021",
+  "050": "2017",
+  "141": "2019",
+  "095": "2017",
+  "076": "2019",
+  "100": "2009",
+  "199": "2019",
+  "600": "2021",
+  "013": "2011",
+  "030": "2023",
+  "139": "2025",
+  "066": "2021",
+  "039": "2023",
+  "083": "2023",
+  "027": "2009",
+  "123": "2021",
+  "157": "2019",
+  "041": "2015",
+  "099": "2015",
+  "086": "2021",
+  "056": "2025",
+  "080": "2025",
+  "018": "2019",
+  "079": "2025",
+  "058": "2019",
+  "097": "2013",
+  "129": "2023",
+  "021": "2023",
+  "054": "2023",
+  "184": "2019",
+  "081": "2015",
+  "102": "2015",
+  "082": "2023",
+  "147": "2023",
+  "197": "2019",
+  "065": "2009",
+  "026": "2023",
+  "137": "2011",
+  "037": "2013",
+  "091": "2009",
+  "052": "2015",
+  "045": "2017",
+  "089": "2009",
+  "084": "2021",
+  "169": "2015",
+  "069": "2009",
+  "196": "2009",
+  "043": "2013",
+  "201": "2009",
+  "192": "2017",
+  "092": "2025",
+  "111": "2017",
+  "004": "2023",
+  "009": "2023",
+  "047": "2023",
+  "117": "2017",
+  "015": "2019",
+  "044": "2019",
+  "182": "2023",
+  "168": "2023",
+  "150": "2019",
+  "142": "2023",
+  "036": "2021",
+  "020": "2021",
+  "098": "2023",
+  "118": "2023",
+  "156": "2023",
+  "119": "2023",
+  "186": "2013",
+  "138": "2021",
+  "127": "2021",
+  "003": "2013",
+  "124": "2023",
+  "063": "2025",
+  "131": "2021",
+  "101": "2023",
+  "179": "2015",
+  "149": "2009",
+  "008": "2017",
+  "164": "2009",
+  "116": "2023",
+  "067": "2009",
+  "087": "2023",
+  "005": "2025",
+  "162": "2019",
+  "068": "2017",
+  "195": "2025",
+  "161": "2019",
+  "034": "2023",
+  "181": "2019",
+  "072": "2009",
+  "024": "2023",
+  "073": "2023",
+  "154": "2021",
+  "166": "2009",
+  "121": "2009",
+  "203": "2023",
+  "178": "2023",
+  "167": "2019",
+  "064": "2011",
+  "183": "2017",
+  "153": "2019",
+  "053": "2019",
+  "128": "2011",
+  "016": "2009",
+  "057": "2021",
+  "002": "2019",
+  "085": "2019",
+  "133": "2013",
+  "088": "2009",
+  "160": "2021",
+  "190": "2019",
+  "148": "2009",
+  "012": "2023",
+  "122": "2011",
+  "011": "2019",
+  "171": "2009",
+  "120": "2025",
+  "152": "2021",
+  "028": "2025",
+  "025": "2009",
+  "032": "2023",
+  "134": "2015",
+  "109": "2023",
+  "090": "2025",
+  "114": "2019",
+  "159": "2023",
+  "112": "2019",
+  "177": "2019",
+  "176": "2015",
+  "049": "2023",
+  "188": "2021",
+  "110": "2009",
+  "038": "2025",
+  "180": "2023",
+  "143": "2021",
+  "029": "2009",
+  "071": "2019",
+  "126": "2025"
+ }
+}

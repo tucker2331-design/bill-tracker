@@ -8,6 +8,16 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-20] design + rule | Drafting room and legislator page v5; names rule; #278 review fold-in
+- Owner feedback on the desktop mocks folded: wide view + 12-column rows; law field searches all 612 laws in PA bill
+  titles; committee path as a left-to-right flow; one-pager facts (copy) instead of a PDF sheet; co-signers and
+  co-sponsors shown only as patterns (10+/5+ bills at 1.5x their usual rate; `tools/calibration/pa/pa_mock_v5.py`);
+  party-line rank says what it ranks; election blocks wait on a PA results source ([[ideas/drafting_war_room]] §8,
+  [[ideas/legislator_portfolio]] §7). New rule: technical name + plain meaning in brackets
+  ([[workflow/design_proposal_protocol]]).
+- #278 fold-in (ab96835): Codex 2 × P2 (scan every commit in the push; shallow history scans fail) + Gemini (crash vs
+  credential message, fsdecode, finally, UTF-8); a centralized JSON loader declined ([[failures/gemini_review_patterns]]).
+
 ## [2026-11-19] security + to-do | Going private: checklist and security audit
 - Owner is making the repo private. Full-history key scan (1,894 commits, 91 branches): no live credentials. 0 forks,
   no Pages. Breaks on the flip: Actions minutes (~9–13k/month vs 2,000 free) and the VA Health page's token-free

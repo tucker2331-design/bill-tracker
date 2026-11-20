@@ -2,19 +2,23 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
 /*CHROME_CSS*/
-/* legislator page, laid out as the PA site shows it at desktop width */
-.maps { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--s4); align-items: center; }
+/* legislator page v5: the PA site's wide view, rows read left to right */
+.maps { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--s3); align-items: center; }
 @media (max-width: 600px) { .maps { grid-template-columns: minmax(0, 1fr); } }
 .maps figure { margin: 0; min-width: 0; }
-.maps svg { width: 100%; height: auto; display: block; max-height: 420px; }
+.maps svg { width: 100%; height: auto; display: block; max-height: 360px; }
 .maps figcaption { color: var(--ink-faint); font-size: 12px; margin-top: 6px; }
 .toggle { background: none; border: 0; padding: 0; color: var(--accent); font-size: 13px; margin-top: var(--s2); }
 .toggle:hover { text-decoration: underline; }
 .list .metarow { grid-template-columns: minmax(0, 1fr) auto; }
+.big { font-size: 15px; }
+.lead { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: var(--s3); }
+.lead b { font-size: 20px; }
+.ph { color: var(--ink-faint); }
 </style>
 
 <!--CHROME:warroom-->
-<main class="main gut">
+<main class="main main-wide gut">
   <nav class="wb-nav"><a class="wb-back" id="back" href="#">‹ Possible sponsors</a><span class="sc">Legislator</span></nav>
   <header class="wb-title">
     <h1 id="name"></h1>
@@ -22,25 +26,23 @@
     <p class="sub2" id="seatsLine"></p>
   </header>
 
-  <div class="cols">
-    <div class="stack">
-      <section class="grp" id="sec-map" aria-label="District map"></section>
-      <section class="grp" id="sec-ca" aria-label="Bills they carry"></section>
-      <section class="grp" id="sec-vo" aria-label="How they vote"></section>
-      <section class="grp" id="sec-wo" aria-label="Who they work with"></section>
-      <section class="grp" id="sec-me" aria-label="Ideas they circulated"></section>
-    </div>
-    <div class="stack">
-      <section class="grp" id="sec-di" aria-label="District"></section>
-      <section class="grp" id="sec-fa" aria-label="Where the district differs"></section>
-      <section class="grp" id="sec-co" aria-label="Committees"></section>
-      <section class="grp" id="sec-hi" aria-label="Our history"></section>
-    </div>
+  <div class="g12">
+    <section class="grp s5" id="sec-map" aria-label="District map"></section>
+    <section class="grp s3" id="sec-el" aria-label="Elections"></section>
+    <section class="grp s4" id="sec-co" aria-label="Committees"></section>
+    <section class="grp s4" id="sec-me" aria-label="Recent memos"></section>
+    <section class="grp s5" id="sec-ca" aria-label="Bills they sponsor"></section>
+    <section class="grp s3" id="sec-vo" aria-label="Party-line voting"></section>
+    <section class="grp s8" id="sec-wo" aria-label="Repeat co-signers"></section>
+    <section class="grp s4" id="sec-di" aria-label="District facts"></section>
+    <section class="grp s6" id="sec-is" aria-label="Whose bills they sign"></section>
+    <section class="grp s6" id="sec-fa" aria-label="Biggest differences from Pennsylvania"></section>
+    <section class="grp s12" id="sec-hi" aria-label="Our history"></section>
   </div>
-  <p class="foot">Mockup of the PA site at desktop width. Every number in the body is real public record: Census ACS 2020–24
-    and 2024 district maps; CMS and NCES for places; PA bill history exports and co-sponsor lists 2023–26; Open States
+  <p class="foot">Mockup of the PA site's wide view. Every number in the body is real public record: Census ACS 2020–24
+    and 2024 district maps; CMS and NCES for places; PA bill history exports and co-sponsor lists 2009–26; Open States
     roll calls; co-sponsorship memos 2025–26; the House roster. Placeholders: the header clocks, the tracking count, the
-    signed-in name, and the Our history rows (team-entered, from the contact log).</p>
+    signed-in name, the election results (no PA election data loaded yet) and the Our history rows (team-entered).</p>
 </main>
 
 <script>
@@ -48,32 +50,34 @@
 /*LINKS*/
 const F = (n) => Number(n).toLocaleString("en-US");
 const P = (x) => (x == null ? "—" : (100 * x).toFixed(1) + "%");
+const P0 = (x) => (x == null ? "—" : Math.round(100 * x) + "%");
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const plural = (n, one, many) => F(n) + " " + (Number(n) === 1 ? one : many);
 const $ = (id) => document.getElementById(id);
-const L = DATA, d = L.district, dn = Number(d);
-const st = { all: false };
-function head(title, sum) { return '<div class="gh"><h3 class="h">' + esc(title) + '</h3><span class="gsum">' + esc(sum || "") + "</span></div>"; }
+const L = DATA, V = DATA.v5, d = L.district, dn = Number(d);
+const st = { all: false, allMemos: false };
+function head(title, paren, sum) {
+  return '<div class="gh"><div class="titles"><h3 class="h">' + esc(title) + '</h3><span class="paren">(' + esc(paren) + ')</span></div><span class="gsum">' + esc(sum || "") + "</span></div>";
+}
 function pairs(rows) { return rows.map((r) => '<div class="metarow"><span class="k">' + esc(r[0]) + "</span><span>" + r[1] + "</span></div>").join(""); }
 const pretty = (k) => k.replace(/^House |^Senate /, "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bAnd\b/g, "and");
-const partyWord = { D: "Democrat", R: "Republican" };
+const partyWord = { D: "Democrat", R: "Republican" }, partyPlural = { D: "Democrats", R: "Republicans" };
+const cur = L.carry[L.carry.length - 1] || {};
+const firstBill = V.first_session[d];
 
 // header
-const cur = L.carry[L.carry.length - 1] || {};
 if (LINKS.drafting) { $("back").href = LINKS.drafting; $("back").target = "_blank"; $("back").rel = "noopener"; }
 $("name").textContent = L.member.name;
 $("headline").textContent = (partyWord[L.member.party] || L.member.party) + " · House District " + dn + " · "
   + (L.local.counties || []).map((c) => c[0]).join(", ") + " · " + (cur.standing || "—") + " party";
-$("seatsLine").textContent = plural(L.seats.length, "committee", "committees") + " · in the data since " + (L.first_session_in_data || "").slice(0, 4);
+$("seatsLine").textContent = plural(L.seats.length, "committee", "committees") + " · first bill in our data: " + (firstBill || "—") + " (our data starts in 2009)";
 
-// map: the state with the district lit, and the district with its neighbors
+// row 1: map · elections · committees
 const statePaths = Object.entries(L.map.state).filter(([k]) => k !== d).map(([, p]) => '<path d="' + p + '" fill="#2A3034" stroke="#0B0D0E" stroke-width="0.6"></path>').join("");
-const ins = L.map.inset;
-const nb = ins.neighbors;
+const ins = L.map.inset, nb = ins.neighbors;
 const nbLabel = (n) => "HD " + Number(n.d) + (L.names[n.d] ? " · " + L.names[n.d].split(" ").pop() : "");
-$("sec-map").innerHTML = head("House District " + dn, F(L.people) + " residents · " + plural((L.local.municipalities || []).length, "municipality", "municipalities"))
-  + '<div class="maps">'
-  + '<figure><svg viewBox="0 0 1000 ' + L.map.dims.h + '" role="img" aria-label="House District ' + dn + ' within Pennsylvania">' + statePaths
+$("sec-map").innerHTML = head("District map", "where House District " + dn + " is, and its neighbors", F(L.people) + " residents")
+  + '<div class="maps"><figure><svg viewBox="0 0 1000 ' + L.map.dims.h + '" role="img" aria-label="House District ' + dn + ' within Pennsylvania">' + statePaths
   + '<path d="' + L.map.state[d] + '" fill="#86B6D3" stroke="#F0F2F3" stroke-width="1.2"></path></svg><figcaption>District ' + dn + " in Pennsylvania.</figcaption></figure>"
   + '<figure><svg viewBox="-45 -12 ' + (ins.w + 90) + " " + (ins.h + 24) + '" role="img" aria-label="House District ' + dn + ' and the districts that border it">'
   + nb.map((n) => '<path d="' + n.path + '" fill="#2A3034" stroke="#0B0D0E" stroke-width="1"></path>').join("")
@@ -82,68 +86,90 @@ $("sec-map").innerHTML = head("House District " + dn, F(L.people) + " residents 
   + '<text x="' + ins.label.x + '" y="' + ins.label.y + '" fill="#F0F2F3" font-size="13" font-weight="700" text-anchor="middle">HD ' + dn + "</text>"
   + "</svg><figcaption>The " + plural(nb.length, "district", "districts") + " that border it.</figcaption></figure></div>";
 
-// district
+$("sec-el").innerHTML = head("Elections", "how safe the seat is", "needs data")
+  + pairs([
+    ["2024 general", '<span class="ph">[winner %] · margin [pts]</span>'],
+    ["2022 general", '<span class="ph">[winner %] · margin [pts]</span>'],
+    ["2024 primary", '<span class="ph">[contested or not] · margin [pts]</span>'],
+    ["Registration", '<span class="ph">[D %] / [R %] / [other %]</span>'],
+    ["First bill in our data", '<span class="num">' + esc(firstBill || "—") + "</span>"],
+  ])
+  + '<div class="foot">A close seat is a reason a member may work across the aisle. Needs PA election results, which we have not loaded (candidate sources: the PA Department of State\'s returns, or Klarner\'s state legislative returns). Virginia already has margins.</div>';
+
+$("sec-co").innerHTML = head("Committees", "current seats", plural(L.seats.length, "seat", "seats"))
+  + '<div class="list">' + L.seats.map((s) => '<div class="metarow"><span class="big">' + esc(pretty(s)) + '</span><span class="sc">' + (L.chairs.indexOf(s) >= 0 ? "chair" : "member") + "</span></div>").join("") + "</div>"
+  + '<div class="foot">From the House roster feed.</div>';
+
+// row 2: memos · bills they sponsor · party-line voting
+function renderMemos() {
+  const ms = st.allMemos ? L.memos : L.memos.slice(-6).reverse();
+  $("sec-me").innerHTML = head("Recent memos", "ideas they're circulating", plural(L.memos.length, "memo", "memos") + " · 2025–26")
+    + '<div class="list">' + ms.map((m) => '<div class="metarow"><span>' + esc(m.title) + '</span><span class="sc">' + esc(m.bill) + "</span></div>").join("") + "</div>"
+    + '<button type="button" class="toggle" id="memoToggle">' + (st.allMemos ? "Show the newest 6" : "Show all " + L.memos.length) + "</button>"
+    + '<div class="foot">Co-sponsorship memo titles from PA\'s memo feed, newest first (by bill number). The right column is the bill a memo became.</div>';
+}
+renderMemos();
+
+$("sec-ca").innerHTML = head("Bills they sponsor", "per session, against bills like theirs", (cur.bills || 0) + " this session · " + (cur.out || 0) + " out of committee")
+  + '<div class="tw"><table class="t"><thead><tr><th>Session</th><th class="r">Bills</th><th class="r">Out of committee</th><th class="r">Expected</th><th class="r">Passed House</th><th class="r">Law</th></tr></thead><tbody>'
+  + L.carry.map((c) => "<tr><td>" + esc(c.session) + (c.open ? ' <span class="muted">open</span>' : "") + '</td><td class="r num">' + c.bills + '</td><td class="r num">' + c.out + '</td><td class="r soft">' + c.expected + '</td><td class="r">' + c.passed + '</td><td class="r">' + c.law + "</td></tr>").join("")
+  + "</tbody></table></div>"
+  + pairs([["Laws they work on", L.focus.map((f) => esc(f[0]) + ' <span class="soft">' + f[1] + "</span>").join(" · ")]])
+  + '<div class="foot">Expected = how many would have got out if their bills did as well as earlier bills from the same committee and party standing. Laws = bills naming that law, 2023–26.</div>';
+
+const vNow = L.votes[L.votes.length - 1] || {};
+const rk = (s) => (s || "").replace(" (1 = most loyal)", "");
+$("sec-vo").innerHTML = head("Party-line voting", "contested roll calls only", "")
+  + '<div class="lead"><b>' + esc(rk(vNow.rank_in_party).split(" of ")[0]) + '</b> <span class="soft">of ' + esc(rk(vNow.rank_in_party).split(" of ")[1] || "—") + " House " + (partyPlural[L.member.party] || "party members") + ' in 2025–26</span><div class="foot" style="margin-top:2px">Party-line rank: 1 = votes with their party most often on contested roll calls.</div></div>'
+  + '<div class="tw"><table class="t"><thead><tr><th>Session</th><th class="r">With party</th><th class="r">Crossed</th><th class="r">Rank</th></tr></thead><tbody>'
+  + L.votes.map((v) => "<tr><td>" + esc(v.session) + '</td><td class="r"><span class="num">' + F(v.with_party) + '</span> <span class="soft">of ' + F(v.contested_votes) + '</span></td><td class="r">' + v.crossed + '</td><td class="r soft">' + esc(rk(v.rank_in_party)) + "</td></tr>").join("")
+  + '</tbody></table></div><div class="foot">Contested = 10% or more of members voted no. Crossing repeats from session to session (r 0.84) unless the majority changes.</div>';
+
+// row 3: repeat co-signers · district facts
+const W = V.legislator;
+const sigRows = (xs, mine) => xs.map((x) => "<tr><td>" + esc(x.name) + ' <span class="muted">' + esc(x.party) + '</span></td><td class="r"><span class="num">' + x.n + '</span> <span class="soft">of ' + x.of + " (" + P0(x.share) + ')</span></td><td class="r soft">' + P0(x.usual) + '</td><td class="r num">' + x.times + '×</td><td class="soft wrap">' + esc(x.top_cmte) + " (" + x.top_cmte_n + " of " + x.n + ")</td></tr>").join("");
+$("sec-wo").innerHTML = head("Repeat co-signers", "who signs their bills far more often than they sign other " + (partyPlural[L.member.party] || "") + "' bills", W.signers_pattern_count + " of " + W.signers_total + " co-signers")
+  + '<div class="tw"><table class="t"><thead><tr><th>Member</th><th class="r">Signed their bills</th><th class="r">Usual rate</th><th class="r">Times usual</th><th>Most shared bills went to</th></tr></thead><tbody>'
+  + sigRows(W.signers_pattern) + "</tbody></table></div>"
+  + '<div class="foot">2023–26, their ' + W.her_bills + " bills. Usual rate = the share of other House " + (partyPlural[L.member.party] || "") + "' bills that member signed. Rule: 10 or more of their bills and 1.5× or more the usual rate. Left out because they sign most " + (partyPlural[L.member.party] || "") + "' bills anyway: " + esc(W.signers_habitual.join(", ")) + ".</div>";
+
 const sen = (L.senate_overlap || []).map(([s, n]) => { const x = L.senators[s] || {}; return "Sen. " + esc(x.name || "?") + " (" + esc(x.party || "?") + "), SD " + Number(s) + ' <span class="soft">· ' + F(n) + " shared</span>"; });
 const pl = L.places;
-$("sec-di").innerHTML = head("District", "Census ACS 2020–24")
+$("sec-di").innerHTML = head("District facts", "Census ACS 2020–24", "")
   + pairs([
     ["Residents", '<span class="num">' + F(L.people) + "</span>"],
     ["Median income", '<span class="num">$' + F(L.median_income.value) + '</span> <span class="soft">± $' + F(L.median_income.moe) + "</span>"],
     ["Places", plural(pl.schools, "public school", "public schools") + " · " + plural(pl.nursing_homes, "nursing home", "nursing homes") + ' <span class="soft">(' + F(pl.nursing_home_beds) + " beds)</span> · " + plural(pl.hospitals, "hospital", "hospitals")],
     ["Municipalities", esc((L.local.municipalities || []).map((x) => x[0]).join(", "))],
     ["School districts", esc((L.local.school_districts || []).map((x) => x[0]).join(", "))],
-    ["Senate", sen.join("<br>") || "—"],
+    ["Senate overlap", sen.join("<br>") || "—"],
   ])
-  + '<div class="foot">2024 district maps. CMS for nursing homes and hospitals, NCES for schools. Senate = senators whose districts share residents with this one.</div>';
+  + '<div class="foot">2024 district maps. CMS for nursing homes and hospitals, NCES for schools.</div>';
+
+// row 4: whose bills they sign · biggest differences
+$("sec-is").innerHTML = head("Whose bills they sign", "sponsors whose bills they sign far more often than usual", W.i_sign_pattern_count + " of " + W.i_sign_sponsors + " sponsors")
+  + '<div class="tw"><table class="t"><thead><tr><th>Sponsor</th><th class="r">They signed</th><th class="r">Usual rate</th><th class="r">Times usual</th><th>Most shared bills went to</th></tr></thead><tbody>'
+  + sigRows(W.i_sign_pattern.slice(0, 8)) + "</tbody></table></div>"
+  + '<div class="foot">2023–26: they co-signed ' + F(W.i_sign_bills) + " House bills. Usual rate = the share of that sponsor's party's other bills they signed. Same rule: 10+ bills, 1.5× or more.</div>";
 
 function renderFacts() {
   const rows = st.all ? L.facts : L.facts.slice(0, 6);
-  $("sec-fa").innerHTML = head("Where it differs from Pennsylvania", st.all ? "all " + L.facts.length + " measures" : "6 largest gaps")
+  $("sec-fa").innerHTML = head("Biggest differences from Pennsylvania", "district share against the state share", st.all ? "all " + L.facts.length + " measures" : "6 largest gaps")
     + '<div class="tw"><table class="t"><thead><tr><th>Measure</th><th class="r">District</th><th class="r">Share</th><th class="r">PA</th></tr></thead><tbody>'
-    + rows.map((f) => "<tr><td>" + esc(f.label) + '</td><td class="r num">' + F(f.count) + '</td><td class="r">' + P(f.share) + '</td><td class="r soft">' + P(f.state) + "</td></tr>").join("")
+    + rows.map((f) => '<tr><td class="wrap">' + esc(f.label) + '</td><td class="r num">' + F(f.count) + '</td><td class="r">' + P(f.share) + '</td><td class="r soft">' + P(f.state) + "</td></tr>").join("")
     + '</tbody></table></div><button type="button" class="toggle" id="factsToggle">' + (st.all ? "Show the 6 largest gaps" : "Show all " + L.facts.length + " measures") + "</button>"
-    + '<div class="foot">Shares use each measure\'s own base (children for child poverty, households for SNAP).</div>';
+    + '<div class="foot">Each share uses its own base: children for child poverty, households for SNAP.</div>';
 }
 renderFacts();
-document.addEventListener("click", (e) => { if (e.target.id === "factsToggle") { st.all = !st.all; renderFacts(); } });
 
-// bills they carry
-$("sec-ca").innerHTML = head("Bills they carry", (cur.bills || 0) + " bills this session · " + (cur.out || 0) + " out of committee")
-  + '<div class="tw"><table class="t"><thead><tr><th>Session</th><th class="r">Bills</th><th class="r">Out of committee</th><th class="r">Expected</th><th class="r">Passed House</th><th class="r">Law</th></tr></thead><tbody>'
-  + L.carry.map((c) => "<tr><td>" + esc(c.session) + (c.open ? ' <span class="muted">open</span>' : "") + '</td><td class="r num">' + c.bills + '</td><td class="r num">' + c.out + '</td><td class="r soft">' + c.expected + '</td><td class="r">' + c.passed + '</td><td class="r">' + c.law + "</td></tr>").join("")
-  + "</tbody></table></div>"
-  + pairs([["Laws they work on", L.focus.map((f) => esc(f[0]) + ' <span class="soft">' + f[1] + "</span>").join(" · ")]])
-  + '<div class="foot">Expected = what bills like theirs did: same committee and party standing, earlier sessions. The current session is still open.</div>';
+$("sec-hi").innerHTML = head("Our history", "team contact log, team only", "")
+  + '<div class="tw"><table class="t"><thead><tr><th>Date</th><th>Contact</th><th>Who from our team</th><th>Note</th><th>Their position</th></tr></thead><tbody>'
+  + '<tr><td class="ph">[date]</td><td class="ph">[meeting]</td><td class="ph">[name]</td><td class="ph">[note]</td><td><span class="sc">[position]</span></td></tr>'
+  + '<tr><td class="ph">[date]</td><td class="ph">[call]</td><td class="ph">[name]</td><td class="ph">[note]</td><td><span class="sc">[asked to sponsor]</span></td></tr>'
+  + "</tbody></table></div>";
 
-// how they vote
-$("sec-vo").innerHTML = head("How they vote", "crossed " + (L.votes[L.votes.length - 1] || {}).crossed + " of " + F((L.votes[L.votes.length - 1] || {}).contested_votes) + " contested")
-  + '<div class="tw"><table class="t"><thead><tr><th>Session</th><th class="r">With party</th><th class="r">Contested votes</th><th class="r">Crossed</th><th class="r">Rank in party</th></tr></thead><tbody>'
-  + L.votes.map((v) => "<tr><td>" + esc(v.session) + '</td><td class="r num">' + F(v.with_party) + '</td><td class="r soft">' + F(v.contested_votes) + '</td><td class="r">' + v.crossed + '</td><td class="r soft">' + esc(v.rank_in_party.replace(" (1 = most loyal)", "")) + "</td></tr>").join("")
-  + '</tbody></table></div><div class="foot">Contested roll calls only (10% or more voted no). Rank 1 = most loyal. Crossing repeats from session to session (r 0.84) unless the majority changes.</div>';
-
-// who they work with
-const who = (xs) => xs.map((x) => esc(x.name) + ' <span class="muted">' + esc(x.party) + "</span> " + x.n).join(" · ");
-$("sec-wo").innerHTML = head("Who they work with", L.work.cross_party_on_hers.split(" of ")[0] + " other-party co-signatures on their bills")
-  + pairs([
-    ["Co-sign their bills", who(L.work.cosign_her_bills)],
-    ["They co-sign", who(L.work.she_cosigns)],
-    ["Other party", "On their bills: " + esc(L.work.cross_party_on_hers) + " co-signatures. On bills they signed: " + esc(L.work.cross_party_she_signs) + "."],
-  ])
-  + '<div class="foot">2023–26. Number after a name = bills.</div>';
-
-// committees
-$("sec-co").innerHTML = head("Committees", plural(L.seats.length, "seat", "seats"))
-  + '<div class="list">' + L.seats.map((s) => '<div class="metarow"><span>' + esc(pretty(s)) + '</span><span class="sc">' + (L.chairs.indexOf(s) >= 0 ? "chair" : "member") + "</span></div>").join("") + "</div>";
-
-// ideas they circulated
-$("sec-me").innerHTML = head("Ideas they circulated", plural(L.memos.length, "memo", "memos") + " · 2025–26")
-  + '<div class="list">' + L.memos.slice(0, 10).map((m) => '<div class="metarow"><span>' + esc(m.title) + '</span><span class="sc">' + esc(m.bill) + "</span></div>").join("") + "</div>"
-  + '<div class="foot">Co-sponsorship memo titles, newest 10 of ' + L.memos.length + ". New memos arrive from PA's memo feed.</div>";
-
-// our history (team-entered; placeholders)
-$("sec-hi").innerHTML = head("Our history", "team only")
-  + '<div class="list">'
-  + '<div class="metarow" style="grid-template-columns:90px minmax(0,1fr) auto"><span class="muted">[date]</span><span>[meeting · who · note]</span><span class="sc">[position]</span></div>'
-  + '<div class="metarow" style="grid-template-columns:90px minmax(0,1fr) auto"><span class="muted">[date]</span><span>[call · who · note]</span><span class="sc">[asked to sponsor]</span></div>'
-  + '</div><div class="foot">From the War Room contact log. Never leaves the team.</div>';
+document.addEventListener("click", (e) => {
+  if (e.target.id === "factsToggle") { st.all = !st.all; renderFacts(); }
+  if (e.target.id === "memoToggle") { st.allMemos = !st.allMemos; renderMemos(); }
+});
 </script>

@@ -77,9 +77,21 @@ def drafting_data() -> dict:
                      pl["nursing_homes"], pl["nursing_home_beds"], pl["hospitals"], pl["schools"], r["majority"]])
     if len(dist) != len(E["shapes"][0]):
         raise SystemExit(f"districts {len(dist)} != map shapes {len(E['shapes'][0])}")
-    return {"dist": dist, "mv": E["measure_values"], "ml": E["measures"], "shapes": E["shapes"], "senators": E["senators"],
+    v5 = _v5()
+    who = {r[0]: (r[1], r[2]) for r in dist}
+    for law, rec in v5["law_record"].items():
+        for row in rec["rows"]:
+            if row["district"] not in who:
+                raise SystemExit(f"{law}: co-signer district {row['district']} is not a House district")
+            row["name"], row["party"] = who[row["district"]]
+    return {"v5": {k: v5[k] for k in ("laws", "law_list", "law_record", "first_session")},"dist": dist, "mv": E["measure_values"], "ml": E["measures"], "shapes": E["shapes"], "senators": E["senators"],
             "steer": E["steering"], "ap": E["appropriations"], "ft": E["filing_time"], "parts": E["parts"],
             "mu": {k: v["of"] for k, v in prof["measures"].items()}}
+
+
+def _v5() -> dict:
+    """Facts computed by tools/calibration/pa/pa_mock_v5.py (owner feedback 2026-11-20)."""
+    return _json(os.path.join(ROOT, "tools/calibration/pa/mock_v5.json"))
 
 
 def legislator_data() -> dict:
@@ -88,6 +100,8 @@ def legislator_data() -> dict:
     ch = "lower" if L["body"] == "H" else "upper"
     L["names"] = {d: (v["member"] or {}).get("name", "") for d, v in prof["states"]["PA"]["chambers"][ch]["districts"].items()
                   if d in {n["d"] for n in L["map"]["inset"]["neighbors"]}}
+    v5 = _v5()
+    L["v5"] = {"legislator": v5["legislator"], "first_session": v5["first_session"]}
     return L
 
 

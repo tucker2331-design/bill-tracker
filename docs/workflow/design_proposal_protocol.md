@@ -1,6 +1,6 @@
 ---
 tags: [workflow, process, design, review, owner-rule]
-updated: 2026-11-19
+updated: 2026-11-20
 status: active
 ---
 
@@ -91,6 +91,25 @@ picture where anything would sit on the real site.
 4. **Check the render once at 1440px** before publishing, and mark placeholders (clocks, names, team-entered rows)
    in the page foot.
 Generator: `tools/design_mocks/desktop/gen_desktop.py`.
+
+## Names: simplified technical English, plain meaning in brackets (owner, 2026-11-20)
+
+> *"the naming and identification seems to be a big problem i would try simplified technical english from here on
+> for it until it seems off or wrong then bring it to my attention with a proposed alternative."*
+
+What happened: section names like "Ideas in flight", "Where they live" and "Support" read as poetry. The owner could
+not tell what was being counted, or why.
+
+**Rule (every section, column and button):**
+1. **Name = what the thing technically is**, in plain words: "Co-sponsorship memos", "Party-line rank",
+   "Earlier bills on this law". Never a metaphor.
+2. **Then, in brackets, what it shows**: "Recent memos (ideas they're circulating)", "Co-sponsors to ask (members
+   who sign bills on this law far more often than their usual bills)".
+3. **Every number says what it counts and out of what**: "12 of 47 (26%)", "75 of 128 House Democrats (1 = votes
+   with the party most often)". A rank always says what it ranks.
+4. **A list of people says why they are on it**: the rule that selected them, in the panel's foot. A raw count is
+   not a pattern; compare with the person's usual rate ("times usual").
+5. When a name still seems off, bring the owner the current name **and** a proposed alternative. Don't silently rename.
 
 ## The one-line test
 > **Before presenting: "Which of our own written rules would catch this if the owner ran the checklist on it?"**
