@@ -8,6 +8,10 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-20] pr | #280 merged — session rollover readiness (c3e394b)
+GitHub CI green on 7dcdcad; Codex no findings; Gemini 1 medium folded (message formatting). `bill-tracker-ca` red from
+the owner's non-main branch-build setting (commented). Watch dates: [[knowledge/session_rollover_2026_27]].
+
 ## [2026-11-20] session | Rollover readiness: CA picks the newest session, stops plainly on an empty export
 - Checked every state's session discovery ahead of CA (Dec 7), PA (Jan 5), NY (Jan 6), VA (Jan 13). CA: newest
   `SESSION_YEAR` (was most-common; identical on every export measured, each holds one session) and an empty export
