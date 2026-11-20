@@ -38,8 +38,6 @@ import random
 import datetime
 
 import gspread
-import google.auth.exceptions
-import requests
 import sheets_retry   # Sheets 429: wait and retry, counted (2026-11-01 lost writes)
 import pytz
 import pandas as pd
@@ -51,10 +49,13 @@ import action_where   # What's new "(In the House)" side tab (additive; Bill_Tra
 import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same signal the calendar worker maintains)
 # When this cycle STARTED (process start, before jitter) -- the cadence marker in Z1 (cadence.IN_WINDOW_MIN_INTERVAL).
 CYCLE_START_UTC = datetime.datetime.now(pytz.utc)
-# The failures a Tick_Gate write can EXPECT (Sheets API, network, auth). Anything else is a bug and fails loudly
-# (case law #105). Gemini #279.
-TICK_GATE_IO_ERRORS = (gspread.exceptions.GSpreadException, requests.exceptions.RequestException,
-                       google.auth.exceptions.GoogleAuthError)
+def _tick_gate_io_errors():
+    """The failures a Tick_Gate write can EXPECT (Sheets API, network, auth). Anything else is a bug and fails loudly
+    (case law #105). Gemini #279. Resolved when an exception is being matched, not at import."""
+    import google.auth.exceptions
+    import requests
+    return (gspread.exceptions.GSpreadException, requests.exceptions.RequestException,
+            google.auth.exceptions.GoogleAuthError)
 
 # Bill_Tracker tab layout. Data columns run A.. from the left; row-1 METADATA cells (the completeness payload +
 # the cadence last-run marker) live in a RESERVED ZONE starting at Z, with blank columns between as headroom.
@@ -1112,7 +1113,7 @@ def _publish_bill_tick_after_success(sheet):
         nxt = cadence.next_due(raw_state, now_utc, cadence.floors_for("bill", STATE.code), CYCLE_START_UTC)
         cadence.write_tick_gate(sheet, "bill_tracker.yml", nxt, now_utc, "full cycle succeeded")
         print(f"⏱️ Tick gate: next bill cycle due {nxt:%Y-%m-%d %H:%M} UTC")
-    except TICK_GATE_IO_ERRORS as e:   # audited: categorized alert; the cycle's own writes are already done
+    except _tick_gate_io_errors() as e:   # audited: categorized alert; the cycle's own writes are already done
         _alert("WARN", "API_FAILURE", f"tick gate write after the cycle failed ({type(e).__name__}: {e}) — Cloudflare "
                f"dispatches every tick until it is written.")
 
@@ -1426,7 +1427,7 @@ def _cadence_should_run():
             nxt = cadence.next_due(raw_state, now_utc, floors, last_marker)
             cadence.write_tick_gate(sheet, "bill_tracker.yml", nxt, now_utc, why)
             print(f"⏱️ Tick gate: next bill cycle due {nxt:%Y-%m-%d %H:%M} UTC")
-        except TICK_GATE_IO_ERRORS as tg_err:   # audited: categorized alert; the gate decision above stands
+        except _tick_gate_io_errors() as tg_err:   # audited: categorized alert; the gate decision above stands
             _alert("WARN", "API_FAILURE", f"tick gate write failed ({type(tg_err).__name__}: {tg_err}) — Cloudflare "
                    f"dispatches every tick until it is written.")
         return run

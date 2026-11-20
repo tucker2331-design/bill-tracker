@@ -7,7 +7,6 @@ import threading
 import hashlib
 import requests
 import gspread
-import google.auth.exceptions
 import sheets_retry   # Sheets 429: wait and retry, counted (2026-11-01 lost writes)
 import pandas as pd
 import re
@@ -29,10 +28,13 @@ import logging
 import cadence   # LIS-safety guardrail #5 (activity-correlated cadence) — pure module, no back-import
 # When this cycle STARTED (process start, before jitter) -- the cadence marker in AC1 (cadence.IN_WINDOW_MIN_INTERVAL).
 CYCLE_START_UTC = datetime.now(timezone.utc)
-# The failures a Tick_Gate write can EXPECT (Sheets API, network, auth). Anything else is a bug and fails loudly
-# (case law #105: a broad except dressed a programming error as an API outage). Gemini #279.
-TICK_GATE_IO_ERRORS = (gspread.exceptions.GSpreadException, requests.exceptions.RequestException,
-                       google.auth.exceptions.GoogleAuthError)
+def _tick_gate_io_errors():
+    """The failures a Tick_Gate write can EXPECT (Sheets API, network, auth). Anything else is a bug and fails loudly
+    (case law #105: a broad except dressed a programming error as an API outage). Gemini #279. Resolved when an
+    exception is being matched, not at import, so importing this module needs no google-auth (unit tests stub it)."""
+    import google.auth.exceptions
+    return (gspread.exceptions.GSpreadException, requests.exceptions.RequestException,
+            google.auth.exceptions.GoogleAuthError)
 
 # pdfminer (pdfplumber's parsing engine) emits a "Could not get FontBBox from
 # font descriptor" WARNING for every malformed font in a parsed agenda PDF —
@@ -8618,7 +8620,7 @@ def run_calendar_update():
                             sheet, "bill_tracker.yml",
                             cadence.next_due(_cad_ac1_state, _tg_now, cadence.floors_for("bill", "VA"), None),
                             _tg_now, "calendar windows refreshed: bill gate re-checks")
-                    except TICK_GATE_IO_ERRORS as _tg_err:   # audited: categorized + printed; AC1 is already written
+                    except _tick_gate_io_errors() as _tg_err:   # audited: categorized + printed; AC1 is already written
                         print(f"⚠️ [API_FAILURE] Tick gate write after the cycle failed ({type(_tg_err).__name__}: "
                               f"{_tg_err}) — Cloudflare dispatches every tick until it is written.")
 
@@ -8796,7 +8798,7 @@ if __name__ == "__main__":
                     _cad_next = cadence.next_due(_raw_cadence, _cad_now, _cad_floors, _cad_last)
                     cadence.write_tick_gate(_cad_sheet, "calendar_worker.yml", _cad_next, _cad_now, _why)
                     print(f"⏱️ Tick gate: next calendar cycle due {_cad_next:%Y-%m-%d %H:%M} UTC")
-                except TICK_GATE_IO_ERRORS as _tg_err:   # audited: categorized + printed; the gate decision stands
+                except _tick_gate_io_errors() as _tg_err:   # audited: categorized + printed; the gate decision stands
                     print(f"⚠️ [API_FAILURE] Tick gate write failed ({type(_tg_err).__name__}: {_tg_err}) — "
                           f"Cloudflare dispatches every tick until it is written.")
                 if not _run_now:

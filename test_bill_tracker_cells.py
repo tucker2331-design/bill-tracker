@@ -36,7 +36,7 @@ class FakeWS:
         return mock.Mock(value=None)
     def clear(self):
         pass
-    def batch_update(self, updates):
+    def batch_update(self, updates, **kw):      # value_input_option=... is a real gspread keyword (Tick_Gate uses it)
         self.batches.append(updates)
 
 
@@ -45,8 +45,10 @@ def main():
     check("completeness cell is a named constant that differs from the cadence marker",
           comp_cell is not None and comp_cell != cadence.BILL_LAST_RUN_CELL,
           f"{comp_cell} vs {cadence.BILL_LAST_RUN_CELL}")
-    ws = FakeWS()
-    sheet = mock.Mock(); sheet.worksheet.return_value = ws
+    ws, gate = FakeWS(), FakeWS()
+    sheet = mock.Mock()
+    # Tick_Gate is its own tab (going private A1): give it its own fake, so the bill tab's batch stays the last one
+    sheet.worksheet.side_effect = lambda name: gate if name == cadence.TICK_GATE_TAB else ws
     rec = {"bill": "HB1", "title": "t", "status_lis": "s", "outcome": "in_progress", "outcome_origin": "keyword_fallback",
            "patron": "p", "patron_id": "H1", "chamber": "House", "crossed_over": False, "floor_house": "",
            "floor_senate": "", "last_committee": "", "referral_count": 0, "latest_vote": {}, "upcoming": [],
@@ -58,6 +60,10 @@ def main():
         A.return_value.open_by_key.return_value = sheet
         C.from_service_account_info.return_value = None
         bt.write_bill_tracker([rec], comp)
+    gate_rows = [u["values"][0] for b in gate.batches for u in b if u["range"] != "A1:D1"]
+    check("a successful write moves the bill's Tick_Gate row forward (Codex #279)",
+          len(gate_rows) == 1 and gate_rows[0][0] == "bill_tracker.yml" and gate_rows[0][3] == "full cycle succeeded",
+          f"gate rows {gate_rows}")
     ranges = [u["range"] for u in ws.batches[-1]]
     tops = [re.match(r"[A-Z]+\d+", r).group(0) for r in ranges]
     check("no two batched writes share a cell", len(set(tops)) == len(tops), f"ranges {ranges}")
