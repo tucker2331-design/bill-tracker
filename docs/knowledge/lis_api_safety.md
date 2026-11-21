@@ -165,7 +165,9 @@ sentinel that follows each calendar run were ~9,000 of ~11,000 billed Actions mi
 private repo gets 2,000 ([[ideas/going_private]] A1). Now, every time a worker's gate decides (run or skip), it also
 writes WHEN its next full cycle could run to the **`Tick_Gate`** tab (`cadence.next_due` asks the same
 `classify_tier` + `should_run` in 5-minute steps, with quiet hours; one fixed row per workflow). `worker/ticks.js`
-reads that tab with the service account and offers only the jobs that are due (up to a minute early).
+reads that tab (with the service account when set, otherwise the link-shared sheet, like every `/api/sheet` read;
+the first version required the key and, measured 2026-11-21, offered every job on the keyless VA Worker) and offers only
+the jobs that are due (up to a minute early).
 **LIS load is unchanged** (the worker's gate still decides every cycle). **Fail direction:** no service account, an
 unreadable tab, a wrong header, a missing row, an unparseable time or a row older than 33 h (the 32 h horizon + 1)
 -> that job is offered every tick, exactly as before. GitHub's own `*/15` cron stays on as the second tick source.
