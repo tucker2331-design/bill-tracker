@@ -8,6 +8,10 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-21] pr | #281 merged — tick gate reader works without the service account (fd23d94)
+GitHub CI green on c80c1d6; Codex no findings; Gemini 1 medium folded (case-insensitive CSV check). VA Worker build green;
+`bill-tracker-ca` red from the owner's non-main branch-build setting (commented). Re-measure scheduled ~4 h after merge.
+
 ## [2026-11-21] measure + fix | Tick gate day 1: not active on VA (keyless Worker); reader fixed
 - 200 runs, 02:16–18:01 UTC: calendar + bill dispatched 63× each (every tick), sentinel 66×; ~9,500 billed min/month,
   no saving. Workers write `Tick_Gate` correctly; the Cloudflare reader required `GCP_SA_JSON`, which the VA Worker lacks,
