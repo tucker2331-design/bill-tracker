@@ -90,5 +90,8 @@ try {
 } catch (e) { htmlErr = e.message; }
 is("a private sheet's sign-in page is an error (then every job is offered), never parsed", htmlErr.includes("not CSV"), true);
 
+const upper = await readTickGate({ SPREADSHEET_ID: "SHEET" }, async () => ({ ok: true, status: 200, headers: { get: () => "TEXT/CSV" },
+  text: async () => '"Workflow","NextDueUTC","WrittenUTC","Reason"' }));
+is("an upper-case content type still reads as CSV (Gemini #281)", upper && upper[0][0], "Workflow");
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

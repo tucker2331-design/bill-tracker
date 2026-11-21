@@ -67,7 +67,8 @@ export async function readTickGate(env, fetchFn = fetch) {
   const res = await fetchFn(gvizUrl(env.SPREADSHEET_ID, { tab: TICK_GATE_TAB, range: "A1:D4", headers: "0" }),
     token ? { headers: { Authorization: `Bearer ${token}` } } : {});
   if (!res.ok) throw new Error(`Tick_Gate read HTTP ${res.status}`);
-  if (!(res.headers.get("content-type") || "").includes("csv")) throw new Error("Tick_Gate read was not CSV (sign-in page?)");
+  // case-insensitive, like handleSheet's /text\/csv/i (Gemini #281)
+  if (!/csv/i.test(res.headers.get("content-type") || "")) throw new Error("Tick_Gate read was not CSV (sign-in page?)");
   return parseCsv(await res.text());
 }
 export const REPO = "tucker2331-design/bill-tracker";
