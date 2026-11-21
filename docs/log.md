@@ -8,6 +8,16 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-21] measure + fix | Tick gate day 1: not active on VA (keyless Worker); reader fixed
+- 200 runs, 02:16–18:01 UTC: calendar + bill dispatched 63× each (every tick), sentinel 66×; ~9,500 billed min/month,
+  no saving. Workers write `Tick_Gate` correctly; the Cloudflare reader required `GCP_SA_JSON`, which the VA Worker lacks,
+  so it offered every job (designed fail-open). Fix: read like `/api/sheet` (key when set, else link-shared). Also: the
+  owner checklist now orders VA's key BEFORE sheets go Restricted ([[ideas/going_private]] A1″).
+
+## [2026-11-20] pr | #280 merged — session rollover readiness (c3e394b)
+GitHub CI green on 7dcdcad; Codex no findings; Gemini 1 medium folded (message formatting). `bill-tracker-ca` red from
+the owner's non-main branch-build setting (commented). Watch dates: [[knowledge/session_rollover_2026_27]].
+
 ## [2026-11-20] session | Rollover readiness: CA picks the newest session, stops plainly on an empty export
 - Checked every state's session discovery ahead of CA (Dec 7), PA (Jan 5), NY (Jan 6), VA (Jan 13). CA: newest
   `SESSION_YEAR` (was most-common; identical on every export measured, each holds one session) and an empty export

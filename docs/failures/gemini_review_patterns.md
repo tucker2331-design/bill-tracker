@@ -567,3 +567,13 @@ own fail-open handler (labelled "cadence gate error") or fails the cycle loudly.
 OUT of the AC1 try, so a tick-gate problem can never be reported as an AC1 write failure. Its other note, pin the
 Tick_Gate header as literals in the tests, is done on both sides (JS and Python), since the header is a contract.
 
+## 2026-11-21 — post-merge measurement of #279 (no reviewer caught this)
+
+### A fail-open path that is the ONLY path in production
+The tick gate's reader required the service-account key and returned "unavailable" without it, which by design
+offers every job. Every test covered the gate with a fake reader, and the keyless path was tested as a fallback. But
+the VA Worker has no key yet, so the fallback was production: day 1 measured 63 dispatches of each worker (every
+tick), no saving at all. **Rule: before relying on a fail-open default, check which branch the live deployment
+actually takes (its secrets, its config), and measure the effect after deploy.** Fixed: the reader reads like every
+`/api/sheet` read (key when set, else the link-shared sheet). The day-1 re-measurement is what caught it.
+

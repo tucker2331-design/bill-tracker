@@ -1,5 +1,5 @@
 /** Cron tick tests (worker/ticks.js). Run: node worker/test_ticks.mjs — fetch is a fake, no network. */
-import { dispatchRequest, offerTicks, TICK_WORKFLOWS, dueWorkflows, TICK_GATE_HEADER, STALE_HOURS } from "./ticks.js";
+import { dispatchRequest, offerTicks, TICK_WORKFLOWS, dueWorkflows, TICK_GATE_HEADER, STALE_HOURS, readTickGate } from "./ticks.js";
 let pass = 0, fail = 0;
 const is = (name, got, want) => {
   const ok = JSON.stringify(got) === JSON.stringify(want);
@@ -74,5 +74,24 @@ is("gate read error -> both offered, gate unavailable", [fallback.dispatched, fa
 is("the gate read error is logged, never swallowed", gerrs.some((e) => e.startsWith("tick_gate_unreadable")), true);
 is("each skipped job is logged with its next-due time", glogs.filter((l) => l.includes("not offered (next due")).length, 2);
 
+// readTickGate without a service account (2026-11-21, measured: the VA Worker has no GCP_SA_JSON, so the first version
+// returned "unavailable" on every tick). It must read the link-shared sheet unauthenticated, like /api/sheet does.
+const seen = [];
+const csv = (body) => ({ ok: true, status: 200, headers: { get: () => "text/csv; charset=utf-8" }, text: async () => body });
+const rowsNoSa = await readTickGate({ SPREADSHEET_ID: "SHEET" }, async (url, init) => { seen.push([url, init]);
+  return csv('"Workflow","NextDueUTC","WrittenUTC","Reason"\n"calendar_worker.yml","2026-11-21T22:56:00Z","2026-11-21T18:01:15Z","x"'); });
+is("no service account -> still reads the tab (unauthenticated)", rowsNoSa && rowsNoSa[1][0], "calendar_worker.yml");
+is("... without an Authorization header", !!(seen[0][1].headers && seen[0][1].headers.Authorization), false);
+is("... from the Tick_Gate tab", seen[0][0].includes("sheet=Tick_Gate"), true);
+is("no spreadsheet configured -> null (not configured)", await readTickGate({}, async () => { throw new Error("no fetch"); }), null);
+let htmlErr = "";
+try {
+  await readTickGate({ SPREADSHEET_ID: "SHEET" }, async () => ({ ok: true, status: 200, headers: { get: () => "text/html" }, text: async () => "<html>" }));
+} catch (e) { htmlErr = e.message; }
+is("a private sheet's sign-in page is an error (then every job is offered), never parsed", htmlErr.includes("not CSV"), true);
+
+const upper = await readTickGate({ SPREADSHEET_ID: "SHEET" }, async () => ({ ok: true, status: 200, headers: { get: () => "TEXT/CSV" },
+  text: async () => '"Workflow","NextDueUTC","WrittenUTC","Reason"' }));
+is("an upper-case content type still reads as CSV (Gemini #281)", upper && upper[0][0], "Workflow");
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

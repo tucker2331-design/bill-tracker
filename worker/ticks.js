@@ -56,14 +56,19 @@ export function dueWorkflows(rows, nowMs) {
   return { due, skipped, gate: "ok" };
 }
 
-/** Read the Tick_Gate tab with the Worker's service account. null = not configured here; throws on a failed read. */
+/** Read the Tick_Gate tab the same way every /api/sheet read works (worker/sheets.js handleSheet): with the service
+ *  account when GCP_SA_JSON is set, otherwise unauthenticated, which works while the sheet is still link-shared.
+ *  Measured 2026-11-21: the first version required the service account, the VA Worker has none yet, so every tick
+ *  read "unavailable" and offered every job (~9,500 min/month). null = no spreadsheet configured; throws on a failed
+ *  read (a private sheet without a token answers with Google's HTML sign-in page, caught by the CSV check). */
 export async function readTickGate(env, fetchFn = fetch) {
-  if (!env.SPREADSHEET_ID || !env.GCP_SA_JSON) return null;
-  const token = await serviceToken(env);
+  if (!env.SPREADSHEET_ID) return null;
+  const token = await serviceToken(env);           // null without GCP_SA_JSON
   const res = await fetchFn(gvizUrl(env.SPREADSHEET_ID, { tab: TICK_GATE_TAB, range: "A1:D4", headers: "0" }),
-    { headers: { Authorization: `Bearer ${token}` } });
+    token ? { headers: { Authorization: `Bearer ${token}` } } : {});
   if (!res.ok) throw new Error(`Tick_Gate read HTTP ${res.status}`);
-  if (!(res.headers.get("content-type") || "").includes("csv")) throw new Error("Tick_Gate read was not CSV (sign-in page?)");
+  // case-insensitive, like handleSheet's /text\/csv/i (Gemini #281)
+  if (!/csv/i.test(res.headers.get("content-type") || "")) throw new Error("Tick_Gate read was not CSV (sign-in page?)");
   return parseCsv(await res.text());
 }
 export const REPO = "tucker2331-design/bill-tracker";
