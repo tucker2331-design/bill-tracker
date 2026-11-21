@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-21] measure | Tick gate works after #281
+- 18:30–22:15 UTC: calendar 0 and bill 1 tick-started job (19:45; due 19:46) vs 14 + 14 in the previous 3.75 h; the
+  sentinel ran after 1 calendar run instead of ~14. The VA Worker now reads `Tick_Gate` through the link-shared sheet
+  ([[ideas/going_private]] A1″). A full-day count next for the monthly minutes figure.
+
 ## [2026-11-21] pr | #281 merged — tick gate reader works without the service account (fd23d94)
 GitHub CI green on c80c1d6; Codex no findings; Gemini 1 medium folded (case-insensitive CSV check). VA Worker build green;
 `bill-tracker-ca` red from the owner's non-main branch-build setting (commented). Re-measure scheduled ~4 h after merge.
