@@ -8,6 +8,10 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-22] pr | #283 merged — every workflow declares its token rights; PR CI minutes measured (279c8aa)
+GitHub CI green on 4b686be; Codex no findings; Gemini 1 medium folded (test fixtures written with `with` + utf-8). VA
+Worker build green; `bill-tracker-ca` red from the owner's non-main branch-build setting (commented).
+
 ## [2026-11-22] security | Every workflow declares its token rights; PR CI minutes measured
 - 24 workflows that inherited the repo-default token now declare it (`contents: read`, or `{}` for the Slack test);
   the broken `api_test.yml` (a Python script saved as a workflow) is deleted. Pre-push audit point 19
