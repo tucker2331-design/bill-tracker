@@ -16,6 +16,10 @@ on:
         type: choice
         options: [dry-run, write]
 
+permissions:
+  contents: read      # least-privilege: the token only checks out the code; sheet writes use GCP_CREDENTIALS
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 concurrency:
   group: pa-bill-tracker      # one run at a time: one request at a time to www.palegis.us
   cancel-in-progress: false

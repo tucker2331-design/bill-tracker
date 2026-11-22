@@ -265,6 +265,28 @@ def check_secrets(fails, rev_range=None):
             fails.append(f"secret_scan: tools/secret_scan.py failed to run (exit {r.returncode}).\n"
                          f"      {(r.stderr or r.stdout).strip()[-600:]}")
 
+def check_workflow_permissions(fails):
+    """Point 19 — every GitHub workflow declares what its token may do (tools/workflow_permissions.py).
+    Repo-wide on every push: the going-private checklist sets the repo's default token to Read
+    (docs/ideas/going_private.md §C), and a workflow that inherits the default would change behaviour with no diff."""
+    tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workflow_permissions.py")
+    if not os.path.isfile(tool):
+        fails.append("tools/workflow_permissions.py is missing — workflow token rights are unchecked.")
+        return
+    try:
+        r = subprocess.run([sys.executable, tool], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        fails.append("workflow_permissions: tools/workflow_permissions.py did not finish within 30s.")
+        return
+    if r.returncode == 1:
+        hits = [line.strip() for line in r.stdout.splitlines() if line.strip().startswith("✗")]
+        fails.append("[19] a workflow does not declare its token rights (add a `permissions:` block naming only "
+                     "what it needs):\n      " + "\n      ".join(hits))
+    elif r.returncode != 0:
+        fails.append(f"workflow_permissions: tools/workflow_permissions.py failed to run (exit {r.returncode}).\n"
+                     f"      {(r.stderr or r.stdout).strip()[-600:]}")
+
+
 def check_caselaw_index(fails):
     """Point B-2 — an audit entry must actually reach the generated `## Index`.
 
@@ -363,6 +385,7 @@ def main():
     check_open_loops(fails)
     # The commits this audit covers: the same range the diff uses (none for --cached, which is not yet a commit).
     check_secrets(fails, ns.range or (None if ns.cached else f"{ns.base}..HEAD"))
+    check_workflow_permissions(fails)
     check_caselaw_index(fails)
     check_claude_md_cadence(fails)
     warn_lines = warns(files)

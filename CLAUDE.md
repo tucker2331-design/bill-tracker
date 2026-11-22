@@ -76,7 +76,7 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 
 ---
 
-## Pre-Push Audit (17 points)
+## Pre-Push Audit (19 points)
 
 Before every commit. Full version in `docs/workflow/three_phase_protocol.md`. **The mechanical half is now
 enforced by a script (B-3): run `python3 tools/prepush_audit.py` before commit; CI runs it on every PR
@@ -108,6 +108,14 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
     survived three wrong diagnoses. Pyflakes catches that class statically, before a cycle ever runs.
 
 16. **Stranded-Work Check (mechanical, B-7).** Unfinished work must be reachable from the to-do. A vault page carrying a residual declares `open_loop: <one line>` in its frontmatter, and `tools/open_loops.py` FAILS the audit unless `docs/state/current_status.md` wikilinks that page; a page marked `status: shipped` (or `archived`) may not declare one. Runs on EVERY push — a diff-scoped check would never see the page that *dropped* the link. **Rationale:** `NEXT` was defined as "needs owner infra / a decision", so an unblocked engineering residual had no lane (not NOW, not NEXT) and survived only inside `docs/ideas/`, invisible to every "is the to-do clear?" check — that is exactly how the §9 relative-time residual sat. The new `READY` lane + this check close it. Never trust `status:` alone as a signal: nearly every vault page says `active` (measured 2026-07-10: 65 of 80), so the field carries almost no information.
+
+18. **Secret Scan (mechanical, going private).** `tools/secret_scan.py` FAILS on a live credential shape in any tracked
+    file or in any commit the push adds (a key added then removed stays in history). Repo-wide, every push: GitHub's free
+    secret scanning stops covering the repo once it is private. See `docs/ideas/going_private.md` A7.
+19. **Workflow Token Rights (mechanical, 2026-11-22).** `tools/workflow_permissions.py` FAILS unless every
+    `.github/workflows/*.yml` declares a `permissions:` block (top level, or in every job) and none uses `write-all`.
+    **Why:** 25 of 38 workflows inherited the repo default; when the owner sets the default to Read, a job leaning on the
+    old default would break with nothing in the diff to explain it. Declared rights make the setting irrelevant.
 
 ---
 

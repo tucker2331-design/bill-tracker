@@ -19,6 +19,10 @@ on:
   schedule:
     - cron: "17 9 * * 1"   # weekly, Mondays 09:17 UTC
 
+permissions:
+  contents: read      # least-privilege: the token only checks out the code; sheet writes use GCP_CREDENTIALS
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 jobs:
   audit:
     runs-on: ubuntu-latest
