@@ -86,9 +86,11 @@ with tempfile.TemporaryDirectory() as d:
     run = lambda: subprocess.run([sys.executable, TOOL, d], capture_output=True, text=True)
     r = run()
     check("an empty directory is an error (wrong path), not a pass", r.returncode == 2)
-    open(os.path.join(d, "ok.yml"), "w").write(TOP)
+    with open(os.path.join(d, "ok.yml"), "w", encoding="utf-8") as fh:
+        fh.write(TOP)
     check("a directory of declared workflows passes", run().returncode == 0)
-    open(os.path.join(d, "bad.yaml"), "w").write(NONE)
+    with open(os.path.join(d, "bad.yaml"), "w", encoding="utf-8") as fh:
+        fh.write(NONE)
     r = run()
     check("one undeclared .yaml file fails the run", r.returncode == 1 and "bad.yaml" in r.stdout)
     check("the summary counts k of n", "1 of 2 workflow files" in r.stdout)
