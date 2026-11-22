@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-22] security | Every workflow declares its token rights; PR CI minutes measured
+- 24 workflows that inherited the repo-default token now declare it (`contents: read`, or `{}` for the Slack test);
+  the broken `api_test.yml` (a Python script saved as a workflow) is deleted. Pre-push audit point 19
+  (`tools/workflow_permissions.py`, 17 checks) fails CI if a workflow stops declaring. Point 18 (secret scan) is now
+  written into CLAUDE.md too. The owner's "Workflow permissions → Read" step can no longer break a job.
+- PR CI measured over 20 days (36 PR commits, 13 merges): ~500 billed min/month, not "~1,190 on a busy day" (withdrawn).
+  Month at November's pace ≈ 1,840 of 2,000. Path-filter trims would save ~66/month (3%): not made
+  ([[ideas/going_private]] A1‴).
+
+## [2026-11-22] pr | #282 merged — tick gate measurements (de82e6b)
+Docs only. GitHub CI green; Codex and Gemini no findings; VA Worker build green; `bill-tracker-ca` red from the owner's
+non-main branch-build setting (commented).
+
 ## [2026-11-22] measure | Actions minutes after the tick gate: ~1,260/month (was ~11,000)
 - 22.3 h (Sat 18:30 → Sun 16:46 UTC, no PRs): 23 runs, ~39 billed min → ~1,260/month vs 2,000 free. Excludes PA (weekdays,
   ~76/month) and PR CI (~1,190 on a busy day), which can still push a busy month past 2,000 ([[ideas/going_private]] A1″).

@@ -27,6 +27,10 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read      # least-privilege: the token only checks out the code; sheet writes use GCP_CREDENTIALS
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 concurrency:
   group: calendar-worker
   cancel-in-progress: false

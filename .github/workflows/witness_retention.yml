@@ -14,6 +14,10 @@ on:
   schedule:
     - cron: "23 7 * * *"   # daily 07:23 UTC (~3am ET; quiet hours; not a worker 3h slot)
 
+permissions:
+  contents: read      # least-privilege: the token only checks out the code; sheet writes use GCP_CREDENTIALS
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 concurrency:
   group: calendar-worker
   cancel-in-progress: false

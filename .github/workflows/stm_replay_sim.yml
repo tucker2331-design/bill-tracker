@@ -10,6 +10,10 @@ name: 🎬 STM Replay Sim (day-by-day 2026 validation)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read      # least-privilege: the token only checks out the code; sheet writes use GCP_CREDENTIALS
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 concurrency:
   group: calendar-worker          # share the worker lock — never overlaps a real cycle
   cancel-in-progress: false

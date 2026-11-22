@@ -577,3 +577,12 @@ tick), no saving at all. **Rule: before relying on a fail-open default, check wh
 actually takes (its secrets, its config), and measure the effect after deploy.** Fixed: the reader reads like every
 `/api/sheet` read (key when set, else the link-shared sheet). The day-1 re-measurement is what caught it.
 
+
+## 2026-11-22 — PR #283 (workflow token rights). Gemini 1 × medium.
+
+### Test fixtures written with a bare `open(...).write(...)`
+The new test wrote its temp workflow files as `open(path, "w").write(text)`: no `with`, no `encoding`. CPython closes
+the file when the object is collected, so it works here, but it leans on the implementation, and the default
+encoding is the platform's (the fixtures are ASCII today; a future `✗` or `§` in one would not be). **Rule: every
+file write, tests included, uses `with open(..., encoding="utf-8")`.** Fixed in `test_workflow_permissions.py`;
+the tool itself already did this.

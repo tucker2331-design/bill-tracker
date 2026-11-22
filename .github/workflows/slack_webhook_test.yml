@@ -9,6 +9,9 @@ name: 🔔 Slack Webhook Test
 on:
   workflow_dispatch:
 
+permissions: {}     # no checkout and no GitHub API call: the token needs no rights at all
+                    # (declared so the repo-default setting cannot change this job: going_private §C)
+
 jobs:
   ping:
     runs-on: ubuntu-latest

@@ -46,6 +46,10 @@ on:
       - '**_test.py'
   workflow_dispatch: {}
 
+permissions:
+  contents: read      # least-privilege: checkout only; results go to the job log, no token writes
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 jobs:
   golden-tests:
     runs-on: ubuntu-latest

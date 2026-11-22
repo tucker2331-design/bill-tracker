@@ -15,6 +15,10 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+permissions:
+  contents: read      # least-privilege: checkout only; results go to the job log, no token writes
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 jobs:
   # B-3: the mechanical half of the 17-point pre-push audit — enforces what a bot caught on #189 a PR late
   # (an output-value change with no WORKER_OUTPUT_LOGIC_VERSION bump). Stdlib-only, so it rides the fast lane.
@@ -130,7 +134,8 @@ jobs:
             test_states.py \
             test_pa_intake.py \
             test_ca_intake.py \
-            test_secret_scan.py; do
+            test_secret_scan.py \
+            test_workflow_permissions.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"

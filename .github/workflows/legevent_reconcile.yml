@@ -19,6 +19,10 @@ on:
   schedule:
     - cron: "0 13 * * 1"   # Mondays 13:00 UTC — baseline (0.33%) confirmed stable
 
+permissions:
+  contents: read      # least-privilege: the token only checks out the code; sheet writes use GCP_CREDENTIALS
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 jobs:
   reconcile:
     runs-on: ubuntu-latest

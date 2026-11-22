@@ -18,6 +18,10 @@ on:
   schedule:
     - cron: "0 12 * * *"   # daily 12:00 UTC (backstop)
 
+permissions:
+  contents: read      # least-privilege: the token only checks out the code; sheet writes use GCP_CREDENTIALS
+                      # (declared so the repo-default setting cannot change this job: going_private §C)
+
 jobs:
   sentinel:
     runs-on: ubuntu-latest
