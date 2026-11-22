@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-22] measure | Actions minutes after the tick gate: ~1,260/month (was ~11,000)
+- 22.3 h (Sat 18:30 → Sun 16:46 UTC, no PRs): 23 runs, ~39 billed min → ~1,260/month vs 2,000 free. Excludes PA (weekdays,
+  ~76/month) and PR CI (~1,190 on a busy day), which can still push a busy month past 2,000 ([[ideas/going_private]] A1″).
+
+## [2026-11-21] measure | Tick gate works after #281
+- 18:30–22:15 UTC: calendar 0 and bill 1 tick-started job (19:45; due 19:46) vs 14 + 14 in the previous 3.75 h; the
+  sentinel ran after 1 calendar run instead of ~14. The VA Worker now reads `Tick_Gate` through the link-shared sheet
+  ([[ideas/going_private]] A1″). A full-day count next for the monthly minutes figure.
+
+## [2026-11-21] pr | #281 merged — tick gate reader works without the service account (fd23d94)
+GitHub CI green on c80c1d6; Codex no findings; Gemini 1 medium folded (case-insensitive CSV check). VA Worker build green;
+`bill-tracker-ca` red from the owner's non-main branch-build setting (commented). Re-measure scheduled ~4 h after merge.
+
 ## [2026-11-21] measure + fix | Tick gate day 1: not active on VA (keyless Worker); reader fixed
 - 200 runs, 02:16–18:01 UTC: calendar + bill dispatched 63× each (every tick), sentinel 66×; ~9,500 billed min/month,
   no saving. Workers write `Tick_Gate` correctly; the Cloudflare reader required `GCP_SA_JSON`, which the VA Worker lacks,
